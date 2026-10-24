@@ -10,3 +10,11 @@ console.log(message);
 const message = name + " has " + cartItems + " items in cart";
 console.log(message);
 
+let color = "blue";
+function change() {
+  let color = "red";
+}
+change();
+console.log(color);
+
+

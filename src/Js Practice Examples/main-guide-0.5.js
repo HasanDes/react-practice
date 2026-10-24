@@ -28,3 +28,13 @@ const double = x => {
   return x * 2;
 };
 console.log(double(5));
+
+/* 
+function evenOdd(x){
+  if (x % 2 === 0) {
+    return true;
+  }
+  else
+    return false;
+}
+ */

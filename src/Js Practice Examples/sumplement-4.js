@@ -1,6 +1,6 @@
-1. Using a for...of loop
+/* 1. Using a for...of loop
 
-javascript
+javascript */
 function calculateCartTotal(cart) {
   let total = 0;
 
@@ -24,7 +24,7 @@ const cart = [
 
 console.log(calculateCartTotal(cart));
 // Output: 90
-2. Using reduce()
+//2. Using reduce()
 
 javascript
 function calculateCartTotal(cart) {
