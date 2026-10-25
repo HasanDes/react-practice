@@ -1,0 +1,22 @@
+**** Shared diagram image on root folder ****
+
+Browser → API: The user enters a search term, such as shoes, and sends an HTTP GET request.
+
+API → Server: The API validates the request and forwards the search parameters.
+
+Server → Database: The server builds and executes a database query.
+
+Database → Server: The database returns matching products.
+
+Server → API: The server formats the results as JSON.
+
+API → Browser: The browser receives the response, updates the UI state, and renders the product list.
+
+
+
+| Layer    | Possible failure                            | Debugging step                                                               |
+| -------- | ------------------------------------------- | ---------------------------------------------------------------------------- |
+| Browser  | UI does not display search results.         | Check the browser console for JavaScript errors and inspect the Network tab. |
+| API      | Request returns `404 Not Found`.            | Verify the API endpoint URL and HTTP method.                                 |
+| Server   | Server returns `500 Internal Server Error`. | Check server logs and inspect the error stack trace.                         |
+| Database | Query returns no matching products.         | Run the SQL query directly and verify the search conditions and data.        |

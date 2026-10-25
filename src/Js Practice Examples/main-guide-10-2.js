@@ -1,7 +1,7 @@
 async function testFailedRequest() {
   try {
     const response = await fetch(
-      "https://jsonplaceholder.typicode.com/invalid-endpoint"
+      "https://jsonplaceholder.typicode.com/posts/1"
     );
 
     if (!response.ok) {

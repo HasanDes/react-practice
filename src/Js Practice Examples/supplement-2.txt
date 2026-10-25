@@ -1,0 +1,81 @@
+## 1. Five Client-Owned Tasks
+
+Client-side tasks run in the user's browser, usually using JavaScript. They improve user experience and provide immediate feedback.
+
+1. Form validation: Check whether required fields are empty before submitting.
+2. UI updates: Show or hide elements based on user actions.
+3. Input formatting: Format phone numbers, dates, or currency values.
+4. User interaction: Handle clicks, dropdowns, menus, and button events.
+5. Client-side filtering and sorting: Filter or sort already-loaded data without requesting the server again.
+
+## 2. Five Server-Owned Tasks
+
+Server-side tasks run on the backend. They protect data, enforce business rules, and manage access to resources.
+
+1. Authentication: Verify user credentials during login.
+2. Authorization: Check whether a user has permission to access a resource or perform an action.
+3. Security validation: Validate incoming data even if the client has already validated it.
+4. Database operations: Create, read, update, and delete records in the database.
+5. Business logic: Enforce rules such as stock availability, order limits, and payment calculations.
+
+## 3. UX Validation vs. Security Validation
+
+| Aspect              | UX validation (Client-side)                                  | Security validation (Server-side)                               |
+| ------------------- | ------------------------------------------------------------ | --------------------------------------------------------------- |
+| Purpose             | Improve user experience                                      | Protect the application and data                                |
+| Location            | Browser                                                      | Backend server                                                  |
+| Speed               | Usually immediate                                            | Requires a server request                                       |
+| Example             | Display “Email is required” before submission                | Reject an invalid email received by the API                     |
+| Can it be bypassed? | Yes, users can modify browser code or send requests directly | Must be enforced by the server; client checks cannot be trusted |
+| Main goal           | Help users correct mistakes                                  | Prevent invalid or unauthorized operations                      |
+
+### Example: Product creation form
+
+Suppose a user creates a product with a name and price.
+
+Client-side validation (UX):
+
+```
+if (!productName.trim()) {
+  alert("Product name is required");
+  return;
+}
+
+if (price <= 0) {
+  alert("Price must be greater than zero");
+  return;
+}
+```
+
+This gives immediate feedback and prevents unnecessary API requests.
+
+Server-side validation (Security):
+
+```
+app.post("/api/products", (req, res) => {
+  const { productName, price } = req.body;
+
+  if (
+    typeof productName !== "string" ||
+    !productName.trim() ||
+    typeof price !== "number" ||
+    !Number.isFinite(price) ||
+    price <= 0
+  ) {
+    return res.status(400).json({
+      message: "Invalid product data",
+    });
+  }
+
+  // Check authorization and save the product to the database.
+  res.status(201).json({ message: "Product created" });
+});
+```
+
+This example illustrates server-side validation; a production endpoint must also enforce authorization and safely persist the data.
+
+## Key takeaway
+
+Client-side validation is for usability; server-side validation is essential for security and data integrity.
+
+Always validate on the server, even when the browser has already validated the input.
