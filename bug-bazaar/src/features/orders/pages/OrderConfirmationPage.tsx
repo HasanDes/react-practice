@@ -58,9 +58,9 @@ export default function OrderConfirmationPage() {
 
   return (
     <section aria-labelledby="order-heading" className="order">
-      <h2 id="order-heading" className="page-heading">
+      <h1 id="order-heading" className="page-heading">
         {summary ? "Thank you! Your order is placed." : `Order ${id}`}
-      </h2>
+      </h1>
       <LoadGate
         state={order}
         onRetry={() => {

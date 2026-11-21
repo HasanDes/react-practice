@@ -94,12 +94,12 @@ describe("switching products quickly", () => {
     // Leave p-0001 before its (slow) response arrives.
     await user.click(screen.getByRole("button", { name: "go p-0002" }));
     expect(
-      await screen.findByRole("heading", { level: 2, name: nameOf("p-0002") }),
+      await screen.findByRole("heading", { level: 1, name: nameOf("p-0002") }),
     ).toBeInTheDocument();
 
     // Wait past p-0001's delay: its late response must not show up.
     await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
-    expect(screen.getByRole("heading", { level: 2, name: nameOf("p-0002") })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: nameOf("p-0002") })).toBeInTheDocument();
     headings.stop();
 
     expect(headings.seen.has(nameOf("p-0001"))).toBe(false); // never shown, not even briefly
@@ -114,7 +114,7 @@ describe("switching products quickly", () => {
     await user.click(screen.getByRole("button", { name: "go p-0003" }));
     await user.click(screen.getByRole("button", { name: "go p-0002" }));
     expect(
-      await screen.findByRole("heading", { level: 2, name: nameOf("p-0002") }),
+      await screen.findByRole("heading", { level: 1, name: nameOf("p-0002") }),
     ).toBeInTheDocument();
 
     await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
@@ -136,11 +136,11 @@ describe("switching products quickly", () => {
       }),
     );
     const { user } = renderAt("/products/p-0001");
-    await screen.findByRole("heading", { level: 2, name: nameOf("p-0001") });
+    await screen.findByRole("heading", { level: 1, name: nameOf("p-0001") });
     expect(relatedSignals.length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "go p-0002" }));
-    await screen.findByRole("heading", { level: 2, name: nameOf("p-0002") });
+    await screen.findByRole("heading", { level: 1, name: nameOf("p-0002") });
     expect(relatedSignals[0]?.aborted).toBe(true);
   });
 });
@@ -157,7 +157,7 @@ describe("nothing keeps running after the page closes", () => {
       .mockImplementation(() => undefined);
 
     const { user } = renderAt("/products/p-0001");
-    await screen.findByRole("heading", { level: 2, name: nameOf("p-0001") });
+    await screen.findByRole("heading", { level: 1, name: nameOf("p-0001") });
 
     const scrollHandlersOf = (spy: typeof added | typeof removed) =>
       spy.mock.calls.filter(([type]) => type === "scroll").map(([, handler]) => handler);
@@ -184,7 +184,7 @@ describe("nothing keeps running after the page closes", () => {
   it("restores the document title on unmount", async () => {
     document.title = "Before";
     const { unmount } = renderAt("/products/p-0001");
-    await screen.findByRole("heading", { level: 2, name: nameOf("p-0001") });
+    await screen.findByRole("heading", { level: 1, name: nameOf("p-0001") });
     expect(document.title).toBe(`${nameOf("p-0001")} · The Bug Bazaar`);
 
     unmount();
@@ -204,7 +204,7 @@ describe("Back to Top", () => {
     vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query }));
 
     const { user } = renderAt("/products/p-0001");
-    await screen.findByRole("heading", { level: 2, name: nameOf("p-0001") });
+    await screen.findByRole("heading", { level: 1, name: nameOf("p-0001") });
     expect(screen.queryByRole("button", { name: /back to top/i })).not.toBeInTheDocument();
 
     scrollTo(800);

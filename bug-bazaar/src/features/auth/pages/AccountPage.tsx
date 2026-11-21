@@ -27,9 +27,9 @@ export default function AccountPage() {
 
   return (
     <section aria-labelledby="account-heading" className="account">
-      <h2 id="account-heading" className="page-heading">
+      <h1 id="account-heading" className="page-heading">
         Your account
-      </h2>
+      </h1>
       <LoadGate
         state={state}
         onRetry={retry}

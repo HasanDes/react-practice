@@ -5,6 +5,8 @@ import type { FromListState } from "../navigation.ts";
 import StockStatus from "./StockStatus.tsx";
 
 type ProductCardProps = {
+  /** Card titles sit one level below the section heading: 2 in the main list (under the page's h1), 3 in Related (under its h2). */
+  headingLevel?: 2 | 3;
   product: Product;
   listSearch: string;
 };
@@ -18,7 +20,8 @@ type ProductCardProps = {
  *   are read as normal content around it.
  * - The image is decorative (a category illustration next to the name), so alt="".
  */
-export default function ProductCard({ product, listSearch }: ProductCardProps) {
+export default function ProductCard({ product, listSearch, headingLevel = 2 }: ProductCardProps) {
+  const Heading = headingLevel === 2 ? "h2" : "h3";
   const linkState: FromListState = { listSearch };
   const { id, name, price, stock, imageUrl, rating } = product;
 
@@ -33,11 +36,11 @@ export default function ProductCard({ product, listSearch }: ProductCardProps) {
         loading="lazy"
       />
       <div className="product-card__body">
-        <h3 className="product-card__name">
+        <Heading className="product-card__name">
           <Link to={`/products/${id}`} state={linkState} className="product-card__link">
             {name}
           </Link>
-        </h3>
+        </Heading>
         <p className="product-card__price">{formatPrice(price)}</p>
         <StockStatus stock={stock} />
         <p className="product-card__rating">

@@ -101,7 +101,7 @@ describe("revisiting reuses data the app already has", () => {
     expect(name).not.toBe("");
 
     await user.click(first);
-    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(name);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(name);
     expect(gets.filter((path) => path.startsWith("/api/products/"))).toHaveLength(0);
   });
 

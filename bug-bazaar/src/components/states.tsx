@@ -15,7 +15,7 @@ type StateCardProps = {
   actions?: ReactNode;
   /** "alert" for errors (announced immediately); omitted for calm states. */
   role?: "alert";
-  /** Render the title as the page's heading (when the card *is* the page, e.g. Not Found). */
+  /** Render the title as the page's h1 (when the card *is* the page, e.g. Not Found). */
   asHeading?: boolean;
 };
 
@@ -26,7 +26,7 @@ function StateCard({ tone, icon, title, description, actions, role, asHeading }:
         {icon}
       </span>
       {asHeading ? (
-        <h2 className="state__title">{title}</h2>
+        <h1 className="state__title">{title}</h1>
       ) : (
         <p className="state__title">{title}</p>
       )}

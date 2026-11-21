@@ -32,7 +32,7 @@ export default function CheckoutPage() {
   if (items.length === 0) {
     return (
       <section>
-        <h2 className="page-heading">Checkout</h2>
+        <h1 className="page-heading">Checkout</h1>
         <EmptyState
           icon="🛒"
           title="Your cart is empty"
@@ -80,9 +80,9 @@ export default function CheckoutPage() {
 
   return (
     <section aria-labelledby="checkout-heading" className="checkout">
-      <h2 id="checkout-heading" className="page-heading">
+      <h1 id="checkout-heading" className="page-heading">
         Checkout
-      </h2>
+      </h1>
 
       <ul className="checkout__lines">
         {items.map((item) => (

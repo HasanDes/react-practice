@@ -141,9 +141,9 @@ export default function LoginPage() {
 
   return (
     <section aria-labelledby="login-heading" className="auth">
-      <h2 id="login-heading" className="page-heading">
+      <h1 id="login-heading" className="page-heading">
         Sign in
-      </h2>
+      </h1>
 
       {session.endedBecause === "expired" && status.status === "idle" && (
         <p role="status" className="auth__notice">

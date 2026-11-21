@@ -93,9 +93,15 @@ describe("cart editing: quantities can't exceed stock", () => {
     addToCart("p-0001", 2);
     const name = product("p-0001").name;
 
-    await user.click(screen.getByRole("button", { name: `Increase quantity of ${name}` }));
+    const plus = screen.getByRole("button", { name: `Increase quantity of ${name}` });
+    await user.click(plus);
     expect(badge()).toBe("3");
-    expect(screen.getByRole("button", { name: `Increase quantity of ${name}` })).toBeDisabled();
+    // At the limit: marked disabled for assistive tech, but still focusable
+    // (a `disabled` button would drop keyboard focus to <body>, D4-1).
+    expect(plus).toHaveAttribute("aria-disabled", "true");
+    expect(plus).toHaveFocus();
+    await user.click(plus); // ignored
+    expect(badge()).toBe("3");
     expect(screen.getByText(/Only 3 available/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: `Decrease quantity of ${name}` }));

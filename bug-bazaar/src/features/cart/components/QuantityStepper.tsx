@@ -12,6 +12,11 @@ type QuantityStepperProps = {
  * − [n] + control. The input keeps a local draft so typing "1" on the way to
  * "12" doesn't fight the user; the value is committed on blur or Enter. The
  * reducer still clamps it to 1…stock: this UI only helps, the store enforces.
+ *
+ * − and + use aria-disabled, not disabled, at the limits: a disabled button
+ * can't keep focus, so pressing + up to the stock limit would drop keyboard
+ * focus to <body> (found in the D4-1 audit). aria-disabled keeps it focusable,
+ * still tells screen readers "dimmed", and the click handler ignores it.
  */
 export default function QuantityStepper({
   productName,
@@ -39,8 +44,10 @@ export default function QuantityStepper({
         type="button"
         className="stepper__button"
         aria-label={`Decrease quantity of ${productName}`}
-        onClick={() => onChange(quantity - 1)}
-        disabled={quantity <= 1}
+        onClick={() => {
+          if (quantity > 1) onChange(quantity - 1);
+        }}
+        aria-disabled={quantity <= 1}
       >
         −
       </button>
@@ -65,8 +72,10 @@ export default function QuantityStepper({
         type="button"
         className="stepper__button"
         aria-label={`Increase quantity of ${productName}`}
-        onClick={() => onChange(quantity + 1)}
-        disabled={quantity >= max}
+        onClick={() => {
+          if (quantity < max) onChange(quantity + 1);
+        }}
+        aria-disabled={quantity >= max}
       >
         +
       </button>

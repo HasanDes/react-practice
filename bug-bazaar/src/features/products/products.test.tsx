@@ -102,7 +102,7 @@ describe("product grid", () => {
     expect(screen.getByRole("link", { name: second.name })).toHaveFocus();
 
     await user.keyboard("{Enter}");
-    const heading = await screen.findByRole("heading", { level: 2, name: second.name });
+    const heading = await screen.findByRole("heading", { level: 1, name: second.name });
     expect(heading).toHaveFocus(); // focus follows the route change
     expect(screen.getByText(formatPrice(second.price))).toBeInTheDocument();
   });

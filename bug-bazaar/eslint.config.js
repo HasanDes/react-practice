@@ -132,6 +132,8 @@ export default tseslint.config(
   {
     files: ["*.config.js", "scripts/**/*.{js,mjs}"],
     languageOptions: { globals: globals.node },
+    // Command-line scripts (e.g. the a11y audit) report by printing.
+    rules: { "no-console": "off" },
   },
 
   prettier,

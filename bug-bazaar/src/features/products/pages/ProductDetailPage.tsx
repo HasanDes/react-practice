@@ -105,9 +105,9 @@ function ProductDetails({ product }: { product: Product }) {
         height={300}
       />
       <div className="product-detail__info">
-        <h2 ref={headingRef} tabIndex={-1} className="page-heading">
+        <h1 ref={headingRef} tabIndex={-1} className="page-heading">
           {product.name}
-        </h2>
+        </h1>
         <p className="product-detail__price">{formatPrice(product.price)}</p>
         <StockStatus stock={product.stock} />
         <AddToCart product={product} />
@@ -142,9 +142,9 @@ function RelatedProducts({ product }: { product: Product }) {
 
   return (
     <section className="related" aria-labelledby="related-heading">
-      <h3 id="related-heading" className="related__heading">
+      <h2 id="related-heading" className="related__heading">
         More {CATEGORY_LABELS[category].toLowerCase()}
-      </h3>
+      </h2>
       <LoadGate
         state={related}
         onRetry={retry}
@@ -155,7 +155,7 @@ function RelatedProducts({ product }: { product: Product }) {
         isEmpty={(items) => items.length === 0}
         empty={<EmptyState title="Nothing else in this category yet" />}
       >
-        {(items) => <ProductGrid products={items} listSearch={listSearch} />}
+        {(items) => <ProductGrid products={items} listSearch={listSearch} headingLevel={3} />}
       </LoadGate>
     </section>
   );

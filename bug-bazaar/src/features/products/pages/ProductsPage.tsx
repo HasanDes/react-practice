@@ -69,9 +69,9 @@ export default function ProductsPage() {
 
   return (
     <section aria-labelledby="products-heading">
-      <h2 id="products-heading" ref={headingRef} tabIndex={-1} className="page-heading">
+      <h1 id="products-heading" ref={headingRef} tabIndex={-1} className="page-heading">
         Products
-      </h2>
+      </h1>
 
       <ProductFilters
         filters={filters}

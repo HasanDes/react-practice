@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useRef } from "react";
 import { Link, Route, Routes } from "react-router-dom";
 import AccountLink from "../features/auth/components/AccountLink.tsx";
 import RequireAuth from "../features/auth/components/RequireAuth.tsx";
@@ -10,6 +10,7 @@ import CheckoutPage from "../features/orders/pages/CheckoutPage.tsx";
 import OrderConfirmationPage from "../features/orders/pages/OrderConfirmationPage.tsx";
 import ProductDetailRoute from "../features/products/pages/ProductDetailPage.tsx";
 import ProductsPage from "../features/products/pages/ProductsPage.tsx";
+import { useFocusOnRouteChange } from "../hooks/useFocusOnRouteChange.ts";
 import NotFoundPage from "./NotFoundPage.tsx";
 
 // QA tool for the mock API: its own chunk, loaded only while mocking is on.
@@ -17,6 +18,9 @@ const QaPanel = lazy(() => import("../dev/QaPanel.tsx"));
 const mockEnabled = import.meta.env.VITE_USE_MOCK_API !== "false";
 
 export default function App() {
+  const mainRef = useRef<HTMLElement>(null);
+  useFocusOnRouteChange(mainRef);
+
   return (
     <div className="app">
       <a className="skip-link" href="#main">
@@ -33,7 +37,7 @@ export default function App() {
           <CartLink />
         </nav>
       </header>
-      <main id="main" tabIndex={-1}>
+      <main id="main" tabIndex={-1} ref={mainRef}>
         <Routes>
           <Route path="/" element={<ProductsPage />} />
           <Route path="/products/:id" element={<ProductDetailRoute />} />
