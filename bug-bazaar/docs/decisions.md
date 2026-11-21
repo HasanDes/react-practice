@@ -769,3 +769,89 @@ Full write-up, including the token-storage trade-off: [auth.md](auth.md).
   - an expired session on `/account` sent the user to sign in with the notice
   - no console errors
 - **Probe false positive:** the browser check's text scan flagged "only has" on the 409 screen. Our copy and the mock's raw message share those words. The raw message is `"Decaf Pods #1" only has 1 left.` (quoted). The screen shows ours. The matrix test avoids this ambiguity with a sentinel string no copy could contain.
+
+---
+
+## D3-5: Caching
+
+### Approach: a small query cache inside `useRequest`
+
+- **Used:** `src/cache/queryCache.ts`, an in-memory map of `key → { data, updatedAt }` with least-recently-used eviction at 100 entries. `useRequest(key, fetcher, { staleTime })` reads and writes it:
+
+  | Cache state for the key                      | What the user sees                                           | Request?               |
+  | -------------------------------------------- | ------------------------------------------------------------ | ---------------------- |
+  | Nothing cached                               | Loading skeleton, then data                                  | Yes                    |
+  | Cached, **fresh** (younger than `staleTime`) | The data, at once                                            | **No**                 |
+  | Cached, **stale**                            | The data, at once, replaced quietly when the refetch returns | Yes, in the background |
+  | Stale, and the background refetch fails      | The cached data stays (no error replaces a working page)     | —                      |
+
+- **Opt-in:** without `staleTime`, `useRequest` behaves exactly as before: no reads, no writes.
+- **Kept from D2:** the key-change reset (now to _that key's_ cached data, never the previous key's), abort on key change and unmount, and race safety. The existing tests passed unchanged.
+- **Considered:**
+  - **TanStack Query:** the standard answer, with request de-duplication, garbage collection, refetch on focus and devtools. It would replace `useRequest`, `RequestState` and the abort and race tests built on Day 2, for features this app doesn't need yet.
+  - **RTK Query:** already installed with Redux Toolkit, so no new dependency. But it also brings its own loading and error model, plus a migration of every page.
+  - **Why the small cache:** about 70 lines that slot into the existing hook, keep every earlier guarantee, and can be explained line by line. **If the app grew** (more endpoints, mutations, refetch on focus, sharing data across many components), I'd move to RTK Query. The keys and stale times here map directly onto it.
+- **One deliberate difference from those libraries:** leaving a page **aborts** its in-flight request (D2-4), so a response that was cancelled never fills the cache. TanStack and RTK Query let it finish and cache it. Ours is simpler and never does work for a page nobody is looking at. The cost: a quick bounce away and back can fetch twice.
+- **Memory only.** A reload starts empty. The catalog is public and cheap to fetch, and persisting it would mean persisting stale stock across sessions.
+
+### When stale data is acceptable
+
+The rule: **stale data is fine where being wrong is cheap and something downstream corrects it. It's never fine where the user acts on it with money or identity.**
+
+| Data                                         | Cached? | Fresh for                         | Why that's acceptable (or not)                                                                                                                                                                                         |
+| -------------------------------------------- | ------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product lists (`products:<query>`)           | ✅      | 30 s, then stale-while-revalidate | Names, prices and images rarely change. Stock may be a few units off, but the cart caps quantities at known stock, and **the server has the final word at checkout** (409 names the item and corrects the cart, D3-2). |
+| Product details (`product:<id>`)             | ✅      | 30 s, then stale-while-revalidate | Same as lists. Also **seeded from the list** (the list already has every field), so list → details is instant.                                                                                                         |
+| Related products (`related:<category>:<id>`) | ✅      | 5 min                             | Suggestions only. Nobody buys from this section without opening the product page.                                                                                                                                      |
+| Signed-in user (`GET /api/me`)               | ❌      | —                                 | It doubles as the "is my token still valid?" check (D3-3). A cached answer would hide an expired session.                                                                                                              |
+| Order status (`GET /api/orders/:id`)         | ❌      | —                                 | It changes on its own (queued → processing → completed). The page polls it.                                                                                                                                            |
+| Placing an order (`POST /api/orders`)        | ❌      | —                                 | Writes always go to the server, made safe to retry with idempotency keys (D3-2).                                                                                                                                       |
+
+**Why 30 seconds:** long enough that back-and-forth browsing (list → product → back → next product) costs no requests, and short enough that a page left open soon refreshes itself. Stale data is shown _while_ refreshing, so even an expired entry costs no loading skeleton. **D4-4** (live stock over WebSockets) will narrow the window further by updating cached stock as it changes.
+
+### Refresh stock after an order is placed
+
+- **Used:** after a successful order, `forgetProducts(boughtIds)` removes every cached entry that **shows** a bought product: its details, list pages containing it, and related lists containing it. A 409 does the same for the products that ran short (their stock was lower than the cache said). The next visit fetches real numbers.
+- **Precise, not a wipe:** entries that don't show a bought product are kept, because their data is as good as before. A test checks both sides: the bought product is fetched again, and another product browsed earlier is still served from the cache.
+- **Considered:**
+  - Clearing the whole cache: simple, but every page refetches after any purchase.
+  - Marking entries stale and keeping them on screen: the user would briefly see the **pre-purchase** stock of what they just bought, then watch it change. Removing those entries means a short loading state instead of a wrong number.
+  - Lowering cached stock locally by the quantities bought: exact for our purchase, but wrong if others bought too. Fetching gets the truth.
+
+### Proving it
+
+- **Unit tests:**
+  - the cache: timestamps, freshness boundary, eviction order including reads, `removeWhere`
+  - catalog helpers: seeding; forgetting across details, related and list shapes, keeping unrelated entries
+  - `useRequest` with a cache:
+    - fresh data means no request and no loading frame
+    - stale data is shown then replaced
+    - a failed background refresh keeps the data
+    - the result is stored
+    - switching to a cached key shows that key's data
+    - no `staleTime` means no cache
+- **App tests** (`caching.test.tsx`):
+  - back to the list: no loading state and no new list request
+  - list → details: no details request
+  - a product revisit is reused within 30 s; after 30 s (a faked clock) the old stock shows at once, then the new stock arrives
+  - after an order, the bought product shows the real stock (5 → 3 left) with a new request, while another product is still cached
+- **Mutation checks**, each caught:
+
+  | Mutation                                   | Failing tests |
+  | ------------------------------------------ | ------------- |
+  | Always refetch                             | 4             |
+  | Cached data not shown on mount             | 8             |
+  | No refresh after an order                  | 1             |
+  | An order wipes the whole cache             | 2             |
+  | The list doesn't seed details              | 1             |
+  | A failed background refresh shows an error | 1             |
+  | Reads don't count for eviction             | 1             |
+
+- **Real browser** (production build, 600 ms latency, in-app navigation only since the cache is in memory):
+  - signing in and coming back to the list made 0 requests, with no skeleton
+  - list → details made 0 details requests
+  - back, then the same product again, made 0 requests with no skeleton
+  - after buying one, "Continue shopping" fetched the list again; the product then showed **51** (was 52), seeded from that fresh list without a separate details request
+  - related products were kept (the related list never contains the page's own product)
+  - no console errors
+- **A mistake in my own check:** the first browser run reported an extra related-products request on revisit. The cause was my script, not the app. The related section's loading skeleton also has the class `product-card`, so the script's "wait until related cards appear" passed immediately. It then left the page with the request still in flight, the abort-on-leave discarded it, and the revisit had to fetch. With the script waiting for real cards, the revisit made 0 requests. Same lesson as before: check what a wait condition actually matches.
