@@ -1331,3 +1331,21 @@ Full write-up: [ai-notes.md](ai-notes.md).
 - **Why that mistake:** every check was green, and the broken line wasn't even in the diff. It's the kind of mistake that survives review, and it changed how I check refactors.
 - **Accuracy:** each claim was checked against the log and the docs. One draft claim, that the stale-401 handling was a fix, had no record behind it. It was part of the design from the start, so it moved to "kept".
 - **Considered:** rewriting the log into the three uses. Rejected: entries written when the mistake was found are more honest than a summary written at the end, so both stay.
+
+---
+
+## D5-8: Assessment
+
+Full write-up: [reflection.md](reflection.md).
+
+- **Used:** a rating out of 10 for every topic (D1-1 to D5-9), each with the evidence behind it, and two gaps with one specific next step each.
+- **What a rating means:** how well I could do it again without help and defend it, not whether it got done. Every task got done, so "done" can't tell topics apart.
+  - **Lower:** a mistake found late or by a check rather than by understanding, or work that's unverified or exists only on paper.
+  - **Not rated yet:** the partner reviews and the submission are marked "–" rather than guessed.
+- **What the ratings showed:** the 9s are where a type, lint rule or pure function made the wrong thing impossible to write. The 6s and 7s are where tests passed but a real browser, a real attack or a real repository disagreed.
+- **The two gaps follow from that:**
+  1. **Browser-level behavior is checked by throwaway scripts, not tests.** Next step: Playwright in CI, three journeys.
+  2. **I can't yet judge security-sensitive code on my own.** Next step: a threat model for sign-in in `auth.md`, with the attack, the defense and a test for each threat.
+- **Considered:**
+  - **Rating by day:** too coarse; Day 3 has both a 9 and a 6.
+  - **Listing every weakness as a gap:** the task asks for two, and two with real next steps are more useful than ten without.
