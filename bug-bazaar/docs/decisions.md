@@ -990,3 +990,45 @@ Full measurements: [performance.md](performance.md).
 ### A mistake in my own tooling
 
 - The trace script's "runs" argument regex lost its backslash (`/^d+$/`), so every "9 runs" request quietly ran 5. I noticed while adding interleaving and fixed it. All numbers in performance.md come from runs after the fix.
+
+---
+
+## D4-3: Memoization and virtualization
+
+Full measurements: [performance.md](performance.md#d4-3-memoization-and-virtualization).
+
+### A real 5,000-item list: an opt-in "All" view
+
+- **Decided with the user:** pagination stays the default. The D2 behavior (shareable page URLs, Back/Forward, tests) is untouched. A toggle adds `?view=all`: every matching product in one scrolling list.
+- **Considered:** replacing pagination with infinite scroll (loses shareable positions, changes D2); keeping pagination only (then there's no 5,000-item list to make smooth).
+
+### Virtualization: `@tanstack/react-virtual`, by rows, window scroller
+
+- **Used:**
+  - **Rendering:** only the rows near the viewport (overscan 2), with padding standing in for the rest, inside a real `<ul>` CSS grid.
+  - **Layout:** columns follow the width, and the first card of each row is measured, so heights come from real layout.
+  - **Data:** pages of 100 load as rows come into view (cached, aborted on leave).
+  - **Back:** scroll position is restored through `initialOffset`.
+- **Considered:**
+  - Hand-rolling it: window-scroll virtualization with measured, wrapping rows is subtle; the library is headless and small, and it's in a lazy chunk.
+  - `react-window`: fixed-size rows only in its simple API, and a grid component that needs absolute-positioned cells, which breaks the `<ul>`/`<li>` semantics.
+  - CSS `content-visibility: auto`: no JavaScript, but all 5,000 cards would still be in the DOM and React would still render them all (the 3.8 s freeze is React and DOM creation, not painting).
+- **Measured:** first card 5,060 → 657 ms, longest task 3,767 → 97 ms, DOM elements 30,682 → 498, scroll blocking time 17 s → 0.
+
+### Memoization: one kept, one removed, one skipped
+
+- **Kept: `React.memo(ProductCard)`.** The first measurement showed it doing nothing, because an object prop was created per render. With primitive props, card renders during a 7 s scroll fell 11,830 → 590, and the median frame went 33 → 17 ms.
+- **Removed: `useCallback` on `useRequest`'s `retry`.** Every caller hands it to the unmemoized `LoadGate`, which wraps it in a new function anyway. Nothing compared its identity.
+- **Skipped: `React.memo` on the filter bar**, and **virtualizing the 24-item pages:** both measured fast already (D4-2, no long tasks), so neither would earn its complexity.
+
+### Also
+
+- **The All view is a lazy chunk** (11.3 KB gzipped). The main bundle grew 1.4 KB instead of 11.5 KB.
+- **Route focus on Back/Forward** focuses the heading without scrolling, so a page can restore its own position. New navigations still scroll to the top.
+- **One real-timer race test** (D2-6) gets an explicit 15 s timeout. It takes about 3 s alone but crossed the 5 s default once under the full parallel suite. A flaky test would block merges once CI gates on tests (D4-6).
+
+### Mistakes caught along the way
+
+- **Mine (AI):** the object prop that silently disabled `React.memo`. It was caught by counting renders, not by reading. Logged in ai-notes.md.
+- **Mine (AI):** two scroll-restore bugs (a passive-effect save after the page swap, and the virtualizer overriding `scrollTo`). Caught by the browser check, fixed, and re-verified.
+- **In my browser script:** it triggered Back twice, which first looked like "filters drop the view" and "restore fails". I checked the script before changing app code.

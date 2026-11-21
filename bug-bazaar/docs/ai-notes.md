@@ -50,3 +50,21 @@ Log of notable AI use during the Bug Bazaar week (required by D5-7: three AI use
 - **How it was caught:** mutation testing. Removing a validation line **didn't fail any test**. Every unsafe input in the tests happened to normalize to `/`, the same as the fallback, so the tests couldn't tell "rejected" from "cleaned up". Asking why led to the bypass.
 - **What changed:** the normalized result is checked too. The tests use a distinct fallback (`/fallback`) and include dot-segment inputs. A check that no input could trigger (the origin comparison) was removed as dead code.
 - **Lesson:** validate what you **output**, not only what you received. And when a test's "rejected" value is also a plausible normal result, the test can pass for the wrong reason.
+
+---
+
+## AI mistake: a React.memo that couldn't work (D4-3)
+
+- **What happened:** the AI memoized `ProductCard` for the virtualized list, but its own grid code passed `position={{ index, total }}`, a new object on every render. Memo's shallow comparison always failed, so every visible card still re-rendered on every scroll frame.
+- **How it was caught:** measurement, not review. The scroll benchmark counted card renders: 12,140 without memo and 11,715 with it. The optimization had no effect.
+- **What changed:** the props became two numbers (`positionIndex`, `setSize`). Card renders during the same scroll fell to 590 (−95%), and the median frame went from 33 to 17 ms.
+- **Lesson:** `React.memo`, `useMemo` and `useCallback` only help if the values being compared can actually be equal from render to render. Don't assume a memoization works: count renders before and after. The same reasoning removed a `useCallback` whose identity nothing compared.
+
+---
+
+## AI mistake: two scroll-restore bugs only a browser could show (D4-3)
+
+- **What happened:** "Back returns to the same place in the 5,000-item list" was written twice before it worked. (1) The position was saved in a normal effect's cleanup, which runs after React has swapped in the shorter product page, when the browser has already clamped `scrollY` to near 0. (2) A manual `scrollTo` on return was overwritten by the virtualizer, which scrolls the window to its own `initialOffset` when it attaches.
+- **How it was caught:** the headless-browser check (Back from product #1996 landed at the top), then a frame-by-frame probe of `scrollY` and sessionStorage, then reading the library source for the attach-time scroll.
+- **What changed:** save in a layout-effect cleanup (it runs before the list's DOM is removed), and restore through the virtualizer's `initialOffset` option. Verified: Back from #2001 returns to #1996.
+- **Lesson:** jsdom has no layout or scrolling, so these bugs can't exist there. Behavior that depends on layout timing needs a real browser, and when a library owns scrolling, read how it behaves on mount before fighting it.

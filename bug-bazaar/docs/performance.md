@@ -138,3 +138,128 @@ A perfect score didn't mean the list was as fast as it could be, which is why th
 
 - **The emoji inside the product images:** the category SVG images contain emoji text (☕, 🦆, …). They're decoded as images rather than laid out as page text. Replacing them with plain shapes would likely save some image decode time. Not measured yet.
 - **The 159 KB mock chunk:** loaded on every visit because there's no real backend. A real deployment wouldn't ship it at all (`VITE_USE_MOCK_API=false` already drops it from the bundle).
+
+---
+
+# D4-3: Memoization and virtualization
+
+**The question:** keep the 5,000-item list smooth, and avoid re-renders that do nothing. Each optimization below is justified with a measurement, including the ones removed or skipped because they weren't needed.
+
+## The 5,000-item list
+
+The default view stays **24 per page** (D2). D4-3 adds an opt-in **"All" view** (`?view=all`, a toggle next to the result count). It shows every matching product in one scrolling list, so there's a real 5,000-item list to keep smooth. Filters and sort apply to it, and "Clear filters" keeps the view.
+
+**How it's measured:** `scripts/perf-scroll.mjs`:
+
+- **Setup:** opens `/?view=all` at 4× CPU and mock latency 0, timing the first real card.
+- **Scroll:** a real **compositor scroll gesture** of 40,000 px at 6,000 px/s (about 7 s, around 400 products), recording every frame.
+- **Reports:** frame times, long tasks, DOM size, and card renders (in instrumented measurement builds only). Builds are interleaved, median of 5.
+
+## Optimization 1: virtualization (kept)
+
+**What:** only the rows near the viewport, plus 2 above and below, are in the DOM. Padding above and below stands in for the rest, so the scrollbar has the full length from the start.
+
+- **Library:** `@tanstack/react-virtual`, using the window as the scroller.
+- **Columns:** they follow the width, matching the grid's `minmax(220px, 1fr)`.
+- **Row heights:** measured, not guessed. In a CSS grid row every card has the row's height, so the first card of each row is measured.
+- **Data:** loads in pages of 100 (the contract's maximum) as rows come into view, through the D3-5 cache. Leaving aborts what's in flight.
+
+**Justification:** "before" is the same view with every row rendered (overscan set to 100,000):
+
+| Metric (`/?view=all`, 4× CPU, median of 5, interleaved) | Every row rendered            | **Virtualized** |
+| ------------------------------------------------------- | ----------------------------- | --------------- |
+| First product card visible                              | 5,060 ms                      | **657 ms**      |
+| Longest task while opening                              | 3,767 ms (the page is frozen) | **97 ms**       |
+| Scroll: median frame                                    | 2,017 ms                      | **33 ms**       |
+| Scroll: long tasks / blocking time                      | 10 / 17,051 ms                | **0 / 0 ms**    |
+| Cards in the DOM                                        | 5,000                         | **40**          |
+| DOM elements                                            | 30,682                        | **498**         |
+
+Without virtualization the page freezes for nearly 4 seconds and scrolling stays unusable. With it, the DOM holds about the same number of cards as one paginated page, whether the list has 50 or 5,000 products.
+
+**Kept accessible:**
+
+- It's still a real `<ul>` of `<li>` cards (axe-checked).
+- Each card has `aria-posinset` and `aria-setsize`, so a screen reader says "3 of 5,000".
+- Tab moves to the next card, which overscan keeps in the DOM.
+- Not-yet-loaded positions are labeled skeleton cards.
+
+**Scroll position on Back:**
+
+- **The problem:** a list you scrolled 2,000 items into must not send you back to the top after viewing a product.
+- **The fix:** the position is saved per history entry and restored through the virtualizer's `initialOffset`.
+- **Two bugs found in the browser:** a normal effect saved the position _after_ the shorter product page had already clamped it to about 0, and the virtualizer overwrote a manual `scrollTo` when it attached. The fix uses a layout-effect save and `initialOffset`.
+- **Measured:** Back from product #2001 returns to #1996, the same row give or take one, since rows above the viewport use estimated heights until measured.
+
+## Optimization 2: `React.memo(ProductCard)` (kept, after fixing it)
+
+**Why it might matter:** the virtual grid re-renders on every scroll frame, because its visible range changes. Every visible card re-renders with it unless memoized.
+
+**First measurement: memo did nothing.** Card renders during the scroll were 12,140 without memo and 11,715 with it. The grid passed `position={{ index, total }}`, a **new object every render**, so memo's shallow comparison always failed. The props became two numbers (`positionIndex`, `setSize`), and everything else passed is a primitive or a stable reference.
+
+**After the fix** (virtualized build, with vs without memo, median of 5, interleaved):
+
+| Metric                             | No memo  | **Memo**       |
+| ---------------------------------- | -------- | -------------- |
+| Card renders during the 7 s scroll | 11,830   | **590** (−95%) |
+| Scroll: median frame               | 33.3 ms  | **16.7 ms**    |
+| Scroll: frames over 33 ms          | 24.5%    | **13.4%**      |
+| Scroll: long tasks / blocking time | 1 / 6 ms | **0 / 0 ms**   |
+
+With the GPU enabled (the runs above use software rendering, `--disable-gpu`), the gap is wider:
+
+| Metric (GPU on, median of 5)       | No memo   | **Memo (shipped)**   |
+| ---------------------------------- | --------- | -------------------- |
+| Scroll: median frame               | 33.3 ms   | **16.7 ms (60 fps)** |
+| Scroll: p95 frame                  | 66.5 ms   | **33.5 ms**          |
+| Scroll: frames over 33 ms          | 34.7%     | **10.2%**            |
+| Scroll: frames over 50 ms          | 15        | **4**                |
+| Scroll: long tasks / blocking time | 5 / 14 ms | **0 / 0 ms**         |
+
+**Lesson:** `React.memo` only works if the props it compares can actually be equal. Measuring render counts caught what reading the code didn't.
+
+## Optimization 3: the All view is a separate chunk (kept)
+
+The virtualizer and the grid added **11.5 KB gzipped (+14%)** to the main bundle, downloaded by every visitor though the view is opt-in. `React.lazy` moves them into their own chunk (11.3 KB gzipped), loaded only when someone opens the All view.
+
+| Main bundle (gzipped) | Before D4-3 | D4-3 without splitting | **D4-3 with the lazy chunk**                  |
+| --------------------- | ----------- | ---------------------- | --------------------------------------------- |
+| `index-*.js`          | 81.8 KB     | 93.3 KB                | **83.2 KB** (the toggle and memo cost 1.4 KB) |
+
+**Default view, no regression** (cold visit to `/`, median of 7, interleaved, D4-2's final build vs D4-3):
+
+|                       | D4-2 final | D4-3      |
+| --------------------- | ---------- | --------- |
+| Product cards visible | 632 ms     | 618 ms    |
+| LCP                   | 876 ms     | 892 ms    |
+| CLS                   | 0.021      | **0.000** |
+
+The CLS improvement is a side effect: the new results bar has a fixed height (from the toggle buttons), so the result count appearing no longer pushes the grid down.
+
+## Removed: `useCallback` around `useRequest`'s `retry`
+
+`useRequest` returned `retry` wrapped in `useCallback` (a stable identity across renders). **Every** caller passes it straight to `LoadGate`, which:
+
+- isn't memoized (so a stable prop saves nothing), and
+- wraps it in a **new** function of its own on every render before passing it on.
+
+No effect lists it as a dependency. The stable identity was thrown away one level down, so it cost a hook call and some reading effort for nothing. It's now a plain function. All 268 tests pass unchanged, and no render count anywhere depends on it.
+
+**Rule applied:** `useCallback` and `useMemo` are for identities that someone compares: a `memo` child's props, or an effect's dependencies. If nothing compares the identity, the hook is overhead.
+
+## Skipped: virtualizing the paginated view
+
+The default view renders **24 cards**. D4-2 measured it at 4× CPU: next page 127 ms, sort 114 ms, typing a search with a worst interaction of 48 ms, and **no long tasks** in any of them. Virtualizing 24 items would add scroll listeners, measurement and absolute positioning for no measurable gain. It would also make the cards harder to use with assistive technology and find-in-page. **Revisit if** the page size grows past roughly 100.
+
+## Skipped: `React.memo` on the filter bar
+
+`ProductFilters` re-renders when `ProductsPage` does: when results arrive, and when a typed search starts or stops waiting. That's a few times per search, not per frame. It renders four controls, and memoizing it would need stable callbacks from the page (more `useCallback`s that only memo would use). **Revisit if** profiling ever shows it in a slow interaction. With no long tasks during typing (D4-2), it isn't.
+
+## Also tried and rejected (from D4-2)
+
+Rendering before the mock backend is ready: the shell appeared 95 ms sooner, but LCP got 68 ms worse. See "Tried and rejected" above.
+
+## What's left
+
+- **4 frames over 50 ms** in a 7 s fling at 6,000 px/s (about 1% of frames), in every build and with or without the GPU, with **no long tasks** behind them. The likely sources are when a new 100-item page arrives (40 new cards render at once) and first-time image decoding. Not yet traced to the frame.
+- Rows above the viewport use estimated heights until first rendered, so a restored scroll position can be off by about one row.
