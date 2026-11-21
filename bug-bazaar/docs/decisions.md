@@ -423,3 +423,40 @@ The table is also at the top of `ProductDetailPage.tsx`, so the code says the sa
 - **Real browser** (Edge, StrictMode, Service Worker):
   - Scroll listeners counted with DevTools' `getEventListeners(window)` go 0 → 1 → 0 (404 page → details → left). StrictMode's double mount leaves no extra listener.
   - Switching through three related products within ~240 ms, with random 0.6–1.8 s responses, only ever rendered the final product.
+
+---
+
+## D2-5: Custom hooks
+
+### The hooks, where they're used, and what they replaced
+
+| Hook                                                                           | Used by                                                | Duplication removed / why it's a hook                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`useRequest(key, fetcher)`**                                                 | `ProductsPage`, `ProductDetailPage`, `RelatedProducts` | The fetch → `RequestState` → `AbortController` → ignore aborts → retry → reset-on-key-change block was copied three times. The three pages lost **85 lines** (gaining 22 lines of hook calls), and `new AbortController()` now appears once in the UI layer. |
+| **`useDebouncedCallback(fn, ms)`** (built on framework-free `createDebouncer`) | `ProductFilters` search; any future debounced input    | Timer + latest-callback + cancel/flush + unmount cleanup is easy to get subtly wrong (stale closures, timers firing after unmount), so it's written and tested once.                                                                                         |
+| **`useScrolledPast(px)`**                                                      | `BackToTop` (on list and details pages)                | Passive listener + rAF throttle + cleanup.                                                                                                                                                                                                                   |
+| **`useDocumentTitle(title)`**                                                  | `ProductsPage`, `ProductDetailPage`                    | Set the title, restore on cleanup. Every page needs it.                                                                                                                                                                                                      |
+
+All are fully typed (`useRequest<T>` infers `T` from the fetcher, so the pages got correct `RequestState<ProductListResponse>` / `RequestState<Product>` types with no annotations).
+
+### `useRequest` design: a key, not a dependency array
+
+- **Used:** `useRequest(key: string | null, fetcher: (signal) => Promise<T>)`. The **key** says _which_ request this is. When it changes, the old request is aborted and the state resets to loading **during render**, so there's no frame with the previous key's data. `null` means "don't fetch" (idle). The fetcher is held in a ref updated after each render, so it always uses the latest props, and its changing identity doesn't refetch.
+- **Considered:**
+  - **`useRequest(fetcher, deps[])`** like `useEffect`. Familiar, but the lint rule can't check custom dependency arrays without extra config, and a forgotten dependency fails silently.
+  - **TanStack Query / SWR now:** they do this plus caching and deduplication. D3-5 (caching) is the right moment to adopt one (or RTK Query). The key-based API was chosen so that migration is mechanical: the same keys become query keys.
+- **The contract:** the fetcher may only use values encoded in the key (`products` uses the canonical URL query string, details uses the id, related uses `related:{category}:{id}`). This is the same rule SWR and TanStack Query use.
+
+### Proving the hooks
+
+- **Direct `renderHook` tests** (`src/hooks/hooks.test.tsx`, 15 tests), with hand-controlled promises (`deferred()`) so tests decide when and in what order responses arrive:
+  - **useRequest:** loading → success; null key never fetches; a new key aborts the old signal and resets in the same render; a late stale answer is ignored; errors; retry; aborts are ignored; unmount aborts; no stale fetcher closure.
+  - **Debouncer** (fake timers): runs once with the last args; cancel; flush; stable identity; latest callback; unmount cancels.
+  - **Title and scroll hooks:** set and restore; flip only at the threshold.
+- **The refactor was behavior-preserving:** all 94 earlier tests passed unchanged after the three pages switched to `useRequest`, including D2-4's rapid-switching and abort tests.
+- **Mutation check:** I removed `useRequest`'s abort and stale-response guard. **8 tests failed**, both the hook's own unit tests and the pages' integration tests, then all passed again once restored.
+
+### Not extracted (on purpose)
+
+- **`useLocalStorage`:** the obvious "sync state with storage" example from the brief, but nothing needs it yet. The cart (D3-1/D3-2) will persist through Redux, where a store-level subscriber is the right place. A hook with no caller would be speculative code.
+- **`useFocusOnMount`** (focus the heading after navigation): used once in `ProductDetails`. I'll extract it if a second page needs it.

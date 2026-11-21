@@ -6,7 +6,7 @@ A small React + TypeScript (strict) store that sells developer gear: rubber duck
 - **Dev → QA workflow:** [docs/workflow.md](docs/workflow.md)
 - **Decisions log:** [docs/decisions.md](docs/decisions.md) (updated every task)
 
-> **Current status: Day 2 in progress. D2-1 to D2-4 done.** Product grid and details page (with related products), URL-based filters, consistent UI states, and **effects that clean up after themselves**: fast product switching never shows the wrong product, and nothing keeps running after a page closes. Custom hooks (D2-5) come next.
+> **Current status: Day 2 in progress. D2-1 to D2-5 done.** Product grid and details page (with related products), URL-based filters, consistent UI states, effects that clean up, and **typed custom hooks** (`useRequest`, `useDebouncedCallback`, `useScrolledPast`, `useDocumentTitle`) that replaced copied logic. Race conditions (D2-6) come next.
 
 ---
 
@@ -140,7 +140,9 @@ bug-bazaar/
 │   ├── hooks/
 │   │   ├── useDebouncedCallback.ts # Debounce with cancel/flush, cleans up on unmount
 │   │   ├── useDocumentTitle.ts     # Per-page tab title, restored on cleanup
-│   │   └── useScrolledPast.ts      # Passive, rAF-throttled scroll listener
+│   │   ├── useRequest.ts           # Keyed fetch: abort on key change/unmount, retry, RequestState
+│   │   ├── useScrolledPast.ts      # Passive, rAF-throttled scroll listener
+│   │   └── hooks.test.tsx          # renderHook tests for every hook
 │   ├── main.tsx                  # Entry point: providers + router
 ├── public/
 │   ├── images/products/          # Category images used by product imageUrl
@@ -210,14 +212,14 @@ bazaarMock.reset(); // wipe orders, sessions, stock changes
 
 ## Week plan and progress
 
-| Day | Theme      | Tasks                                                                                                                           | Pts | Status |
-| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------- | --- | ------ |
-| 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                                          | —   | ✅     |
-| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer ✅                                           | 15  | ✅     |
-| 2   | Browse     | D2-1 Product list ✅ · D2-2 Filters ✅ · D2-3 UI states ✅ · D2-4 Effects cleanup ✅ · D2-5 Custom hooks · D2-6 Race conditions | 21  | 🟡     |
-| 3   | Buy        | D3-1 Redux Toolkit · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching                                                 | 21  | ⬜     |
-| 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring            | 22  | ⬜     |
-| 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission                                   | 21  | ⬜     |
+| Day | Theme      | Tasks                                                                                                                              | Pts | Status |
+| --- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- | --- | ------ |
+| 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                                             | —   | ✅     |
+| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer ✅                                              | 15  | ✅     |
+| 2   | Browse     | D2-1 Product list ✅ · D2-2 Filters ✅ · D2-3 UI states ✅ · D2-4 Effects cleanup ✅ · D2-5 Custom hooks ✅ · D2-6 Race conditions | 21  | 🟡     |
+| 3   | Buy        | D3-1 Redux Toolkit · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching                                                    | 21  | ⬜     |
+| 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring               | 22  | ⬜     |
+| 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission                                      | 21  | ⬜     |
 
 Days 1 to 3 produce the working store and come first if time runs short.
 
