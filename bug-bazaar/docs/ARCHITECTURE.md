@@ -107,7 +107,7 @@ flowchart LR
 4. **`LoadGate`** maps the request state to loading, error, empty, not found or success. Each page shows those states the same way.
    - On an error, `classifyError` decides what it means: offline, timeout, server, not found and so on.
    - `describeLoadError` picks the copy, and whether **Try again** is offered.
-5. **Presentational components** render the data. `ProductCard` is memoized and takes only primitive props, so updating one card doesn't re-render the other 23.
+5. **Presentational components** render the data. `ProductCard` is memoized, and its props are primitives or stable references (the product object comes from the cache unchanged). When the virtualized grid re-renders on scroll, cards whose props haven't changed are skipped.
 
 ### Changing data: checkout
 
@@ -217,6 +217,82 @@ There are three kinds, and each has one home. The test for each is who needs it,
 | Which list a product was opened from         | Router state, not the URL       | Keeps `/products/p-0042` clean to share |
 
 The query string has one canonical form: defaults are left out, so the same view always gets the same URL. That string is also the cache key, so "same URL" means "same cached data".
+
+## Design patterns
+
+Three patterns carry most of the structure. For each: where it's used, and why it's there rather than something simpler. A few smaller ones follow.
+
+### 1. Container and presentational components
+
+**The idea:** one component per screen owns the data and the side effects: the URL, requests, the store. The components it renders only take props and report back through callbacks. They don't fetch, read the store or touch the URL.
+
+**Where:**
+
+| Container                                                                                                   | Presentational components it renders                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [ProductsPage](../src/features/products/pages/ProductsPage.tsx): URL filters, the list request              | [ProductFilters](../src/features/products/components/ProductFilters.tsx) (`filters`, `onFiltersChange`, `onClear`), [ProductGrid](../src/features/products/components/ProductGrid.tsx) → [ProductCard](../src/features/products/components/ProductCard.tsx), [Pagination](../src/features/products/components/Pagination.tsx) (`page`, `totalPages`, `onPageChange`) |
+| [ProductDetailPage](../src/features/products/pages/ProductDetailPage.tsx): the product and related requests | The same `ProductGrid` for related products, with `headingLevel={3}`                                                                                                                                                                                                                                                                                                 |
+| [CartPage](../src/features/cart/pages/CartPage.tsx): cart lines from the store, dispatching changes         | [QuantityStepper](../src/features/cart/components/QuantityStepper.tsx) (`quantity`, `max`, `onChange`)                                                                                                                                                                                                                                                               |
+
+**Why:**
+
+- **The URL stays the single source of truth** for what the list shows. Only `ProductsPage` reads and writes it. `ProductFilters` doesn't know a URL exists: it reports "category changed" and the container decides what that means, for example going back to page 1.
+- **Reuse:** `ProductGrid` shows the main list and related products unchanged, because it doesn't know where its products came from.
+- **Testing and memoization:** a component that depends only on its props can be tested by passing props, and `React.memo` can skip it when they're unchanged. That's what keeps the 5,000-item view smooth (D4-3).
+
+**Where it's deliberately not used:** small leaves that are the same everywhere connect to the store themselves. [AddToCart](../src/features/cart/components/AddToCart.tsx) dispatches `itemAdded`, and [CartLink](../src/features/cart/components/CartLink.tsx) reads the count. Passing those through every container would be prop drilling, with nothing gained.
+
+### 2. Custom hooks
+
+**The idea:** behavior with a lifecycle, such as subscribing, cancelling or cleaning up, is written once as a hook. Components then just say what they need.
+
+**Where:**
+
+| Hook                                                                | Used by                                                                   | What it hides                                                                                          |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [useRequest](../src/hooks/useRequest.ts)                            | `ProductsPage`, `ProductDetailPage`, `AccountPage`                        | Abort on key change and unmount, ignore stale responses, retry, cache with stale-while-revalidate      |
+| [useLiveStock / useWatchStock](../src/features/stock/liveStock.tsx) | Product cards (via `LiveStockStatus`), product details, cart and checkout | Registering with the watch registry on mount and unregistering on unmount; live value or REST fallback |
+| [useDebouncedCallback](../src/hooks/useDebouncedCallback.ts)        | `ProductFilters` (search as you type)                                     | A timer that's cancelled on unmount and can be flushed on Enter                                        |
+| [useDocumentTitle](../src/hooks/useDocumentTitle.ts)                | Every page, and the crash fallback                                        | Setting the tab title, and restoring the previous one on unmount                                       |
+| [useFocusOnRouteChange](../src/hooks/useFocusOnRouteChange.ts)      | `App`                                                                     | Moving focus to the new page's `<h1>` after navigation (not on the first load or a query change)       |
+| [useScrolledPast](../src/hooks/useScrolledPast.ts)                  | `BackToTop`                                                               | A scroll listener that's added and removed correctly                                                   |
+
+**Why:**
+
+- **The hard bugs get fixed once.** Race conditions, leaked timers and requests that outlive their page are the bugs that recur when every page writes its own `useEffect` (D2-4, D2-6). `useRequest` fixes them in one place, and every page gets the fix.
+- **Tested on their own:** [hooks.test.tsx](../src/hooks/hooks.test.tsx) and [useRequestCache.test.tsx](../src/hooks/useRequestCache.test.tsx) test the hooks without any page.
+- **Pages read as intent:** `const stock = useLiveStock(product.id, product.stock)` says what the page needs. The WebSocket, reference counting and fallback live elsewhere.
+
+### 3. Adapter
+
+**The idea:** a thin layer translates something outside the app's control (the HTTP API, the URL, a WebSocket, any thrown error) into a shape the app defines. The rest of the code depends on the app's shape, never on the outside thing.
+
+**Where:**
+
+| Adapter                                                                | Translates                                                              | Into                                                                           |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| [src/api/](../src/api/) (`request()`, `getProducts`, `createOrder`, …) | `fetch`, status codes, JSON of unknown shape, timeouts                  | Typed functions returning validated data, or one error type: `ApiRequestError` |
+| [stockFeed.ts](../src/api/stockFeed.ts)                                | A raw WebSocket: open, close, messages that need parsing, silence       | `onSnapshot`, `onUpdate` and `onStatus` callbacks; reconnecting is hidden      |
+| [filters.ts](../src/features/products/filters.ts)                      | `URLSearchParams`: untrusted strings                                    | `ProductFilters`, then `ProductQuery` for the API (`toProductQuery`)           |
+| [classifyError](../src/errors/appError.ts)                             | Anything thrown: `ApiRequestError`, `AbortError`, `TypeError`, a string | One `AppError` union (`offline`, `timeout`, `out-of-stock`, …)                 |
+
+**Why:**
+
+- **The backend is replaceable.** The mock and a real server look the same to the app: switching is `VITE_API_BASE_URL`, with no code changes. If the API's error format changed, `errors.ts` and `schemas.ts` would change, and no page would.
+- **Bad input stops at the edge.** Responses are validated by zod and URLs are parsed with defaults, so code inside the app never sees a malformed product or an unknown sort.
+- **Decisions are made once.** "Is this error worth a Try again?" is answered from `AppError`, in one table, instead of every page checking status codes its own way (D3-4).
+
+### Smaller patterns
+
+- **Render props:** [LoadGate](../src/components/LoadGate.tsx) calls `children(data)` only on success, so a page can't render its content without data. [ErrorBoundary](../src/components/ErrorBoundary.tsx) takes a `fallback({ reportId, reset })`.
+- **Factories with injected dependencies:**
+  - `makeStore()`, `createQueryCache({ now })`, `createMonitor({ transport })`, `createStockFeed({ WebSocketImpl })` and `startLiveStock({ createFeed })`.
+  - Each test gets a fresh, controllable instance, and production can swap a dependency without editing the code that uses it.
+  - `configureApiClient` is the same idea for the API client: the store plugs in the token and 401 handling.
+- **Observer:**
+  - The live stock watch registry is a publisher with reference counts.
+  - The crash test is a tiny external store read with `useSyncExternalStore`.
+- **Discriminated unions as state machines:** `RequestState` (`idle | loading | success | error`) and `SessionState` (`anonymous | authenticated`). Impossible states, such as "loading but with an error" or "a token but no user", can't be written.
 
 ## A choice to defend: server data is not in Redux
 

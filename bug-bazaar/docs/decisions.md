@@ -1258,3 +1258,18 @@ Full write-up: [ARCHITECTURE.md](ARCHITECTURE.md).
   - A diagram image (draw.io, Excalidraw): prettier, but it goes stale silently.
   - Generating the folder tree with a tool: the hand-written tree says what each folder _is for_, which a generated one can't.
 - **D5-2** adds the design patterns section to the same page.
+
+---
+
+## D5-2: Design patterns
+
+Written up in [ARCHITECTURE.md → Design patterns](ARCHITECTURE.md#design-patterns).
+
+- **Used:** the three patterns that carry the most structure, each with a table of where it's used (linked to the files) and why:
+  1. **Container / presentational:** `ProductsPage` owns the URL and requests; `ProductFilters`, `ProductGrid`, `ProductCard` and `Pagination` only take props.
+  2. **Custom hooks:** `useRequest`, `useLiveStock`, `useDebouncedCallback` and four smaller ones.
+  3. **Adapter:** the API layer, the stock feed, URL ⇄ filters, and `classifyError`.
+- **Also listed, briefly:** render props (`LoadGate`, `ErrorBoundary`), factories with injected dependencies, observer (the watch registry), and discriminated unions as state machines.
+- **Why these three:** each one prevents a bug class this project actually had to handle. Containers keep one source of truth for the URL. Hooks fix race and cleanup bugs once. Adapters keep bad input and backend details at the edge.
+- **Honest limits:** the page also says where a pattern is deliberately _not_ used. Small connected leaves (`AddToCart`, `CartLink`) read the store themselves, because threading them through containers would be prop drilling.
+- **Correction while writing:** D5-1's page said `ProductCard` "takes only primitive props". It takes a `product` object too, one whose reference stays stable because it comes from the cache. The sentence now says so, matching the component's own comment.
