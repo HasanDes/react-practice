@@ -1,0 +1,25 @@
+import type { Product } from "../../../types/api.ts";
+import ProductCard from "./ProductCard.tsx";
+
+type ProductGridProps = {
+  products: readonly Product[];
+};
+
+/**
+ * Presentational: renders what it's given. Data loading lives in the page
+ * (container/presentational split).
+ *
+ * A semantic list (<ul>), not role="grid": ARIA grids are for interactive
+ * tabular data with arrow-key navigation. For a set of product links, plain
+ * Tab order is what keyboard and screen reader users expect, and a list
+ * announces "list, 24 items".
+ */
+export default function ProductGrid({ products }: ProductGridProps) {
+  return (
+    <ul className="product-grid">
+      {products.map((product) => (
+        <ProductCard key={product.id} product={product} />
+      ))}
+    </ul>
+  );
+}

@@ -56,7 +56,14 @@ export default tseslint.config(
   // bootstrap (main.tsx) may load the mock backend.
   {
     files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/api/**", "src/mocks/**", "src/main.tsx"],
+    // Tests may set up the mock backend; production UI code may not.
+    ignores: [
+      "src/api/**",
+      "src/mocks/**",
+      "src/main.tsx",
+      "src/**/*.test.{ts,tsx}",
+      "src/test/**",
+    ],
     rules: {
       "no-restricted-globals": [
         "error",

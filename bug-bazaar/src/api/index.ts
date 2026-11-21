@@ -5,4 +5,3 @@ export { ApiRequestError, isAbortError, isApiRequestError, type ApiErrorKind } f
 export { getProduct, getProducts } from "./products.ts";
 export { getMe, login } from "./auth.ts";
 export { createOrder, getOrder } from "./orders.ts";
-export { getBugs } from "./bugs.ts";
