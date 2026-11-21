@@ -212,3 +212,56 @@ Both are fixed now. A good example of types catching what tests didn't (logged i
 ### Week 1 board
 
 The legacy `fetchBugs()` fake moved from `src/mocks/` into `src/api/bugs.ts` (`getBugs()`), so even the old board gets its data through the data layer. It's deleted when the product grid lands (D2-1).
+
+---
+
+## D2-1: Product list
+
+### Money: integer cents, formatted in exactly one place
+
+- **Used:** prices stay integer cents everywhere (API, state, future cart math). `formatPrice(cents)` in `src/utils/formatPrice.ts` is the only place they become text, using one shared `Intl.NumberFormat("en-US", { style: "currency", currency: "USD" })`.
+- **Considered:** `(cents / 100).toFixed(2)` with a `$` prefix (no thousands separator, not locale-aware); dividing into dollars when data arrives (floats then spread through the app: `0.1 + 0.2 = 0.30000000000000004`).
+- **Why:** converting at the last moment means no float rounding can build up in totals. `Intl` handles separators and the currency symbol correctly (`123456` → `$1,234.56`, `5` → `$0.05`). The formatter is created once at module level, because constructing `Intl` objects per card would be wasteful. `formatPrice` **throws** on non-integers, because `19.99` means someone passed dollars, and failing loudly beats displaying `$0.20`.
+
+### Keyboard: one Tab stop per card (stretched link), not an ARIA grid
+
+- **Used:** a semantic `<ul>` of cards. Only the product name is a `<Link>`. Its `::after` pseudo-element covers the card, so the whole card is clickable (the "stretched link"). The focus ring is drawn around the whole card with `:has(.product-card__link:focus-visible)`.
+- **Considered:**
+  - **Wrapping the whole card in `<a>`:** the link's accessible name becomes everything inside ("Decaf Pods #1 $34.99 In stock (52) Rated 4.5 out of 5"), read out on every Tab.
+  - **`role="grid"` with arrow-key navigation (roving tabindex):** the ARIA grid pattern is for interactive _tabular_ data such as spreadsheets. On a product list it changes how screen readers announce and navigate it, and users don't expect arrow keys there.
+- **Why:** Tab and Shift+Tab move card to card. Enter opens the details page. Screen readers announce "list, 24 items" and a short link name. Price and stock are ordinary content that can be read in browse mode.
+- **Focus management:**
+  - Opening a product moves focus to its `<h2>` (`tabIndex={-1}`), so screen reader users hear where they landed.
+  - Paging moves focus to the "Products" heading, so keyboard users aren't stranded at the bottom. `focus()` also scrolls it into view. I first added `scrollIntoView()` too, but it was redundant (and jsdom flagged it).
+  - Programmatically focused headings get no focus ring, because a ring on non-interactive text looks clickable (caught in a screenshot review).
+  - A "Skip to content" link is the first Tab stop.
+- **Stock in words, not just color** ("In stock (52)", "Only 3 left", "Sold out"; WCAG 1.4.1). The image is a decorative category illustration next to the name, so `alt=""`.
+
+### Structure: container and presentational components
+
+- **Used:** `ProductsPage` and `ProductDetailPage` own data loading (via `src/api/`), request state and paging. `ProductGrid`, `ProductCard`, `StockStatus` and `Pagination` only render props. This is one of the D5-2 patterns.
+- **Why:** the presentational parts are trivially reusable and testable, and D4-3 can memoize or virtualize the grid without touching data code.
+
+### Details page: remount per product (`key={id}`)
+
+- **Used:** the route renders `<ProductDetailPage key={id} id={id} />`. Each load uses an `AbortController` that aborts in the effect cleanup.
+- **Why:** with a key, going from product A to B mounts a _fresh_ component. State resets to "loading" for free, and the old product can never flash. The alternative, resetting state inside the effect, is the pattern React's docs advise against (an extra render with stale data). The abort means a slow response for A can't land after B. D2-4 builds on this (Back to Top listener, rapid-switch tests).
+
+### Pagination now, URL later
+
+- **Used:** Previous/Next with "Page X of Y", 24 per page (local `useState`).
+- **Why:** the contract is paginated (`page`, `total`). D2-2 moves page and filters into the URL (refresh/share/Back), and D4-3 revisits how 5,000 items scroll (virtualization or infinite loading). Nothing here blocks either.
+
+### Skipped (on purpose)
+
+- **`React.memo` on `ProductCard`:** I first added it, then removed it. With 24 cards per page and no frequent parent re-renders yet, there's nothing to save, and D4-3 requires each optimization to be justified by a measurement. It goes back in only if the profiler shows a need (likely once live stock updates arrive in D4-4).
+
+### Testing: React Testing Library + jsdom
+
+- **Used:** `@testing-library/react` + `user-event` in jsdom, with the **real** app, data layer and MSW handlers (`products.test.tsx`). The tests drive the UI the way a user does: `user.tab()`, `{Enter}`, queries by role and accessible name.
+- **Why:** "the grid works with a keyboard" is now a regression test, not a claim. It asserts exact Tab order (skip link → title → card 1 → card 2), that Enter opens details, and that focus lands on the heading. Logic tests stay in the faster Node environment, and component tests opt into jsdom per file.
+- **Boundary rule:** test files may import `src/mocks/`; production UI code still may not (ESLint).
+
+### Week 1 board removed
+
+The bugs feature, `LoadGate`'s bug-specific copy and `src/api/bugs.ts` are gone. `/` is now the store. `LoadGate` takes `loadingText` / `errorText`, so pages show friendly copy and never a raw error message (a first step toward D2-3 and D3-4).

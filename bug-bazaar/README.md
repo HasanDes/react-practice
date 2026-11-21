@@ -6,7 +6,7 @@ A small React + TypeScript (strict) store that sells developer gear: rubber duck
 - **Dev → QA workflow:** [docs/workflow.md](docs/workflow.md)
 - **Decisions log:** [docs/decisions.md](docs/decisions.md) (updated every task)
 
-> **Current status: Day 1 complete (D1-1 to D1-4).** Tooling, the mock store API, strict TypeScript and a **single data layer** (`src/api/`, the only code allowed to touch the network) are in place. The screens are still the Week 1 bug board; Day 2 replaces them with the product grid.
+> **Current status: Day 2 in progress. D2-1 done.** The store shows a keyboard-accessible **product grid** (24 per page, prices formatted from cents) and a **details page**, backed by the mock API through the data layer. Filters and URL state (D2-2) come next.
 
 ---
 
@@ -48,19 +48,19 @@ The project pins Node 26 in `.nvmrc`.
 
 ## Scripts
 
-| Script                 | What it does                                                           | Status |
-| ---------------------- | ---------------------------------------------------------------------- | ------ |
-| `npm run dev`          | Start the Vite dev server with hot reload                              | ✅     |
-| `npm run build`        | Type-check, then production build into `dist/`                         | ✅     |
-| `npm run preview`      | Serve the production build locally                                     | ✅     |
-| `npm run lint`         | ESLint: correctness, React Hooks rules, accessibility (jsx-a11y)       | ✅     |
-| `npm run lint:fix`     | ESLint with auto-fix                                                   | ✅     |
-| `npm run format`       | Prettier: rewrite all files to the house style                         | ✅     |
-| `npm run format:check` | Prettier: fail if anything is unformatted (for CI)                     | ✅     |
-| `npm run test`         | Run all tests once (Vitest). Includes the API contract tests           | ✅     |
-| `npm run test:watch`   | Vitest in watch mode                                                   | ✅     |
-| `npm run check`        | lint + format:check + typecheck + test + build: run before every push  | ✅     |
-| `npm run typecheck`    | `tsc -b`: strict type check of app, tests and config (no output files) | ✅     |
+| Script                 | What it does                                                            | Status |
+| ---------------------- | ----------------------------------------------------------------------- | ------ |
+| `npm run dev`          | Start the Vite dev server with hot reload                               | ✅     |
+| `npm run build`        | Type-check, then production build into `dist/`                          | ✅     |
+| `npm run preview`      | Serve the production build locally                                      | ✅     |
+| `npm run lint`         | ESLint: correctness, React Hooks rules, accessibility (jsx-a11y)        | ✅     |
+| `npm run lint:fix`     | ESLint with auto-fix                                                    | ✅     |
+| `npm run format`       | Prettier: rewrite all files to the house style                          | ✅     |
+| `npm run format:check` | Prettier: fail if anything is unformatted (for CI)                      | ✅     |
+| `npm run test`         | Run all tests once (Vitest + Testing Library): contract, data layer, UI | ✅     |
+| `npm run test:watch`   | Vitest in watch mode                                                    | ✅     |
+| `npm run check`        | lint + format:check + typecheck + test + build: run before every push   | ✅     |
+| `npm run typecheck`    | `tsc -b`: strict type check of app, tests and config (no output files)  | ✅     |
 
 ## Environment variables
 
@@ -101,18 +101,17 @@ bug-bazaar/
 │   │   ├── schemas.ts            # Zod schemas validating every response
 │   │   ├── errors.ts             # ApiRequestError (kind: http/network/timeout/aborted/...)
 │   │   ├── products.ts, auth.ts, orders.ts  # Typed endpoint functions
-│   │   ├── client.test.ts        # Data-layer tests
-│   │   └── bugs.ts               # Legacy Week 1 source (removed in D2-1)
+│   │   └── client.test.ts        # Data-layer tests
 │   ├── app/                      # App shell: routes, layout, app-wide pages
 │   │   ├── App.tsx
 │   │   └── NotFoundPage.tsx
 │   ├── components/               # Shared, feature-agnostic UI
 │   │   └── LoadGate.tsx          # Renders loading/error/success from a RequestState
 │   ├── features/                 # One folder per feature: its pages + components
-│   │   └── bugs/                 # Week 1 board (replaced by products/ in Day 2)
-│   │       ├── components/
-│   │       ├── pages/
-│   │       └── types.ts
+│   │   └── products/
+│   │       ├── components/       # Presentational: ProductGrid, ProductCard, StockStatus, Pagination
+│   │       ├── pages/            # Containers: ProductsPage (/), ProductDetailPage (/products/:id)
+│   │       └── products.test.tsx # Integration tests (keyboard, prices, states)
 │   ├── mocks/                    # Mock backend (MSW). See docs/api-contract.md
 │   │   ├── data/seed.ts          # Deterministic 5,000-product generator
 │   │   ├── contract.ts           # Contract constants + allowed errors per route
@@ -124,6 +123,10 @@ bug-bazaar/
 │   │   └── browser.ts            # Starts the Service Worker, exposes bazaarMock
 │   ├── styles/
 │   │   └── global.css
+│   ├── test/setup.ts             # Test setup (DOM matchers, cleanup)
+│   ├── utils/
+│   │   ├── formatPrice.ts        # Cents → "$19.99" (the only place)
+│   │   └── toError.ts
 │   ├── vite-env.d.ts             # Typed import.meta.env
 │   ├── types/
 │   │   ├── api.ts                # Shared contract types (single source of truth)
@@ -146,19 +149,19 @@ bug-bazaar/
 
 Folders added by later tasks _(planned)_:
 
-| Folder                                            | Purpose                                                            | Task  |
-| ------------------------------------------------- | ------------------------------------------------------------------ | ----- |
-| `src/hooks/`                                      | Reusable typed hooks (`useDebounce`, `useLocalStorage`, …)         | D2-5  |
-| `src/store/`                                      | Redux Toolkit: cart and session slices, selectors                  | D3-1  |
-| `src/utils/`                                      | Pure helpers: `formatPrice` (cents → display), query-param parsing | D2-1  |
-| `src/features/products`, `cart`, `auth`, `orders` | Store features                                                     | D2–D3 |
+| Folder                                | Purpose                                                    | Task |
+| ------------------------------------- | ---------------------------------------------------------- | ---- |
+| `src/hooks/`                          | Reusable typed hooks (`useDebounce`, `useLocalStorage`, …) | D2-5 |
+| `src/store/`                          | Redux Toolkit: cart and session slices, selectors          | D3-1 |
+| `src/features/cart`, `auth`, `orders` | Store features                                             | D3   |
 
 **Rules of thumb**
 
-1. A file used by one feature lives in that feature's folder. Move it to `components/` only when a second feature needs it.
+1. A file used by one feature lives in that feature's folder (e.g. `StockStatus` in `features/products/`). Move it to `components/` only when a second feature needs it.
 2. Components never talk to the network. They call functions from `src/api/index.ts`. ESLint fails on `fetch`, `XMLHttpRequest`, `WebSocket`, `axios` or mock imports anywhere else.
 3. File names: `PascalCase.tsx` for components, `camelCase.ts` for everything else. Import with the extension (`./App.tsx`).
-4. Data from outside the app (JSON, URL params, storage, form values) is `unknown` until a type guard narrows it. No `as` casts on untrusted data.
+4. Money is integer cents everywhere. Only `formatPrice()` turns it into text.
+5. Data from outside the app (JSON, URL params, storage, form values) is `unknown` until a type guard narrows it. No `as` casts on untrusted data.
 
 ## API contract
 
@@ -195,14 +198,14 @@ bazaarMock.reset(); // wipe orders, sessions, stock changes
 
 ## Week plan and progress
 
-| Day | Theme      | Tasks                                                                                                                | Pts | Status |
-| --- | ---------- | -------------------------------------------------------------------------------------------------------------------- | --- | ------ |
-| 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                               | —   | ✅     |
-| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer ✅                                | 15  | ✅     |
-| 2   | Browse     | D2-1 Product list · D2-2 Filters · D2-3 UI states · D2-4 Effects cleanup · D2-5 Custom hooks · D2-6 Race conditions  | 21  | ⬜     |
-| 3   | Buy        | D3-1 Redux Toolkit · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching                                      | 21  | ⬜     |
-| 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring | 22  | ⬜     |
-| 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission                        | 21  | ⬜     |
+| Day | Theme      | Tasks                                                                                                                  | Pts | Status |
+| --- | ---------- | ---------------------------------------------------------------------------------------------------------------------- | --- | ------ |
+| 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                                 | —   | ✅     |
+| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer ✅                                  | 15  | ✅     |
+| 2   | Browse     | D2-1 Product list ✅ · D2-2 Filters · D2-3 UI states · D2-4 Effects cleanup · D2-5 Custom hooks · D2-6 Race conditions | 21  | 🟡     |
+| 3   | Buy        | D3-1 Redux Toolkit · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching                                        | 21  | ⬜     |
+| 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring   | 22  | ⬜     |
+| 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission                          | 21  | ⬜     |
 
 Days 1 to 3 produce the working store and come first if time runs short.
 
