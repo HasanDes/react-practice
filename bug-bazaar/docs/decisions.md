@@ -1273,3 +1273,27 @@ Written up in [ARCHITECTURE.md → Design patterns](ARCHITECTURE.md#design-patte
 - **Why these three:** each one prevents a bug class this project actually had to handle. Containers keep one source of truth for the URL. Hooks fix race and cleanup bugs once. Adapters keep bad input and backend details at the edge.
 - **Honest limits:** the page also says where a pattern is deliberately _not_ used. Small connected leaves (`AddToCart`, `CartLink`) read the store themselves, because threading them through containers would be prop drilling.
 - **Correction while writing:** D5-1's page said `ProductCard` "takes only primitive props". It takes a `product` object too, one whose reference stays stable because it comes from the cache. The sentence now says so, matching the component's own comment.
+
+---
+
+## D5-3: Queues and the order flow
+
+Full write-up: [orders.md](orders.md).
+
+- **Used:** an order service that does only the synchronous part, in one transaction, then hands off to payment, inventory and email workers through a broker. The transaction checks the idempotency key, reserves stock (so a 409 is still immediate), and writes the order and an outbox row.
+- **The same contract:** `POST /orders` still answers `201 { id, status: "queued" }` or `409`, and the confirmation page's polling keeps working. The frontend doesn't change.
+- **Key choices:**
+  - **Reserve stock synchronously, commit it in the inventory worker.** The D3-2 contract promises an immediate 409 naming the short items, which a worker can't give. Reserving up front also means stock can't be sold twice while payment runs.
+  - **Transactional outbox, not "publish after commit".** It avoids both an order no job knows about and a job for an order that was rolled back.
+  - **Email is off the critical path.** `completed` means paid and stock committed. A missing email is retried for about 24 h and then dead-lettered with an alert; it never fails an order.
+  - **Three layers against double charges:**
+    - the browser's per-cart key (D3-2, built)
+    - a unique `(user_id, key)` in the orders database
+    - an idempotent payment worker: a per-order payment state machine, plus the order id as the payment provider's idempotency key, because delivery is at least once
+- **Gaps found in the current contract, written down instead of glossed over:**
+  - There is no failure status. `payment_failed` is proposed as an additive change.
+  - The mock replays a key even if the cart differs. A real server should answer `422`.
+  - There's no order history page, so the confirmation page is the only place to see an order.
+- **Considered:**
+  - **Synchronous calls from the order service** to payment, inventory and email: simpler, but checkout is then as slow and as fragile as the slowest dependency.
+  - **A saga orchestrator** (Temporal, Step Functions): worth it when there are more steps and compensations than here. Three workers driven by events stay readable without one.
