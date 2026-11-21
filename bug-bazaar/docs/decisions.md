@@ -1297,3 +1297,18 @@ Full write-up: [orders.md](orders.md).
 - **Considered:**
   - **Synchronous calls from the order service** to payment, inventory and email: simpler, but checkout is then as slow and as fragile as the slowest dependency.
   - **A saga orchestrator** (Temporal, Step Functions): worth it when there are more steps and compensations than here. Three workers driven by events stay readable without one.
+
+---
+
+## D5-4: Architecture vocabulary
+
+Full write-up: [glossary.md](glossary.md).
+
+- **Used:** for each of the six terms (latency, idempotency, horizontal scaling, CDN, cache invalidation, eventual consistency):
+  - a **one-line version**, to say first when asked
+  - a short explanation
+  - an **example from this store**, linked to the code or doc
+  - the term it's most **often confused with**: throughput, "safe", "the database scales too", hosting, eviction, "it doesn't matter". Being able to draw that line is what shows understanding.
+- **Examples are real, not hypothetical:** the mock's 300 ms latency and jitter, the checkout `Idempotency-Key`, bearer tokens and a browser-side cart (why the API can scale out), Vite's hashed file names, `forgetProducts` and the 30 s / 5 min expiry, and stock converging from cache, feed and the 409.
+- **Honesty over neatness:** the eventual consistency entry includes a counter-example from this codebase. Two tabs' carts never converge (last write wins on reload), which is _not_ eventual consistency. The fix is named: listen for the `storage` event.
+- **Considered:** one example per term, from anywhere. Tying each term to this store makes it something I've built and can defend, not a definition I memorized.
