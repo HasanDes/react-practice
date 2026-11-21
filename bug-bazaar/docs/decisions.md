@@ -1242,3 +1242,19 @@ Full write-up: [monitoring.md](monitoring.md).
   - **Throw in a click handler.**
   - **Unhandled promise rejection.**
 - **Exposure:** the crash trigger only exists while the mock API is on. The read-only `reports()` is always available.
+
+---
+
+## D5-1: Architecture
+
+Full write-up: [ARCHITECTURE.md](ARCHITECTURE.md).
+
+- **Used:**
+  - **A walk-through by questions:** the folder structure with what each folder owns, then how data flows (loading, checkout, live stock, startup), then where each kind of state lives (server, client, URL), then one defended choice.
+  - **Mermaid diagrams:** they render on GitHub, are diffable text, and change in the same commit as the code.
+- **"Matches the code":** the page was written from a survey of `src/`, not from memory, and each claim was checked: file names, action names, constants (30 s / 5 min / LRU 100 / 3 s polling), storage keys, and the import rules. One rule turned out _not_ to hold as first written. "Shared folders never import features" has an exception: `ErrorState`'s **Sign in** link uses `loginHref` from `features/auth/`. The page documents the exception and when it would be worth moving, instead of claiming a rule the code doesn't follow.
+- **The defended choice:** server data stays out of Redux (`useRequest` + `queryCache`), with its cost and the point at which RTK Query would be the better tool.
+- **Considered:**
+  - A diagram image (draw.io, Excalidraw): prettier, but it goes stale silently.
+  - Generating the folder tree with a tool: the hand-written tree says what each folder _is for_, which a generated one can't.
+- **D5-2** adds the design patterns section to the same page.
