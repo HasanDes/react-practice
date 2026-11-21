@@ -216,3 +216,34 @@ Route names: `products:list`, `products:get`, `login`, `me`, `orders:create`, `o
 ### Latency
 
 The base latency is `VITE_MOCK_LATENCY_MS` (default 300 ms), plus random jitter of the same size. So responses take 300–600 ms and can **arrive out of order**, which is exactly what D2-6 needs. Change it at runtime with `bazaarMock.latency(ms, jitter)`.
+
+---
+
+## Calling the API from the app (data layer)
+
+UI code never calls `fetch`. It imports typed functions from `src/api/index.ts` (enforced by ESLint):
+
+```ts
+import { getProducts, createOrder, isAbortError } from "../api/index.ts";
+
+const { items, total } = await getProducts(
+  { search: "duck", category: "ducks", inStock: true },
+  { signal },
+);
+const order = await createOrder(
+  { items: [{ productId: "p-0001", quantity: 2 }] },
+  { idempotencyKey },
+);
+```
+
+Every failure is thrown as an `ApiRequestError`:
+
+| `kind`             | Meaning                                   | `status` / `code` / `details`   |
+| ------------------ | ----------------------------------------- | ------------------------------- |
+| `http`             | Non-2xx response                          | Set from the `ApiError` body    |
+| `network`          | No response (offline, connection reset)   | `null` / `null` / `{}`          |
+| `timeout`          | No response within 10 s (configurable)    | `null` / `null` / `{}`          |
+| `aborted`          | Cancelled by the caller via `signal`      | Usually ignore (`isAbortError`) |
+| `invalid-response` | 2xx but the body doesn't match the schema | `status` set; a contract bug    |
+
+Every 2xx body is validated against a schema in `src/api/schemas.ts` before it reaches the caller.

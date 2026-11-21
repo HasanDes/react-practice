@@ -160,3 +160,55 @@ TypeScript flagged `onUnhandledRequest` as an unknown option. **MSW 3 renamed it
 - the browser used the default `"warn"` instead of `"bypass"`
 
 Both are fixed now. A good example of types catching what tests didn't (logged in `docs/ai-notes.md`).
+
+---
+
+## D1-4: Data layer
+
+### One client, one entry point: `src/api/`
+
+- **Used:** a thin wrapper over `fetch` (`src/api/client.ts`) with typed endpoint functions (`products.ts`, `auth.ts`, `orders.ts`), exposed only through `src/api/index.ts`. Components call `getProducts()`, `login()`, `createOrder()` and so on, never a URL.
+- **Considered:**
+  - **axios:** interceptors and timeouts out of the box, but ~13 KB for features `fetch` + `AbortSignal` now cover natively.
+  - **RTK Query / TanStack Query right away:** they solve caching (D3-5) and request state (D2-3), but they're a caching layer _on top of_ a transport, not a replacement for it. Adopting one now would blur D1-4 into D3.
+- **Why:** one `request()` function is the single place for base URL, JSON, auth header, timeout, cancellation, error normalization and response validation. Changing any of these later (a real backend, a token refresh) touches one file.
+- **Forward plan:** D3 (Redux Toolkit) will likely use RTK Query for caching. Its `baseQuery` will wrap this `request()`, so the "one place" stays one place.
+
+### Enforced, not just a convention
+
+- **Used:** ESLint rules for every file in `src/` outside `src/api/`, `src/mocks/` and the `main.tsx` bootstrap:
+  - `no-restricted-globals` bans `fetch`, `XMLHttpRequest`, `WebSocket` and `EventSource`
+  - `no-restricted-properties` bans `window.fetch` (and `globalThis`/`self`)
+  - `no-restricted-imports` bans `axios`/`ky`/`msw`, any import from `mocks/`, and deep imports into `api/` other than `api/index.ts`
+- **Verified** with a probe component: all six bypass attempts fail lint. `npm run check` (and CI in D4-6) therefore guarantee D1-4's "components never make network calls directly".
+- `WebSocket` is banned too, so D4-4's live stock feed must also live in `src/api/`.
+
+### Errors: one class, classified by `kind`
+
+- **Used:** `ApiRequestError` with `kind: "http" | "network" | "timeout" | "aborted" | "invalid-response"`, plus `status`, `code` and `details` from the contract's `ApiError` body.
+- **Why:** UI code needs to answer "what should I show?", and the answer depends on the _kind_ of failure:
+  - `aborted` means the user moved on, so show nothing (D2-4, D2-6)
+  - `network` / `timeout` / 500 mean show a retry option (D2-3)
+  - 400 maps `details` onto form fields
+  - 401 means the session is gone
+  - 409 means name the out-of-stock item from `details` (D3-2)
+
+  D3-4 will map these to user-facing copy. The class keeps the server's `message` only for logging.
+
+- **Timeout vs abort:** the client combines the caller's signal with `AbortSignal.timeout()` (`AbortSignal.any`). When the request fails, it checks _which_ signal fired, so a user cancellation is never mistaken for a slow server.
+- **401 handling is scoped:** only `auth: true` calls notify `onUnauthorized`. A 401 from `POST /login` means wrong credentials, not an expired session, and must not log anyone out. This is covered by a test.
+
+### Validate at the boundary: Zod (`zod/mini`)
+
+- **Used:** a schema per contract response (`src/api/schemas.ts`). `request()` requires one, so no unvalidated JSON can enter the app. Each schema is declared `satisfies ZodMiniType<T>` against the hand-written contract type, so the two can't drift.
+- **Considered:** casting `response.json() as T` (zero cost, but a lie: a contract mismatch surfaces later as `undefined` deep in a component); hand-written type guards (verbose for nested shapes); full `zod` (~13 KB gzipped) versus `zod/mini` (~2 KB, tree-shakable functional API).
+- **Why:** the contract is the thing every task builds on. If the server (or the mock) breaks it, the app fails _at the boundary_ with a clear `invalid-response` error naming the endpoint, instead of rendering `NaN` prices. Error bodies are parsed leniently (any string `code`), so a new server code still reaches the UI.
+
+### Session wiring without a circular import
+
+- **Used:** `configureApiClient({ getToken, onUnauthorized })`. The session layer (D3-1/D3-3) injects how to read the token and what to do on 401. The client doesn't import the store.
+- **Why:** if the API imported the store and the store imported the API (thunks), the two would form an import cycle and be hard to test. Tests use the same hook to inject a fake token and spy on `onUnauthorized`. It returns a restore function for isolation.
+
+### Week 1 board
+
+The legacy `fetchBugs()` fake moved from `src/mocks/` into `src/api/bugs.ts` (`getBugs()`), so even the old board gets its data through the data layer. It's deleted when the product grid lands (D2-1).

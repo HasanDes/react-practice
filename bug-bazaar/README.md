@@ -6,7 +6,7 @@ A small React + TypeScript (strict) store that sells developer gear: rubber duck
 - **Dev → QA workflow:** [docs/workflow.md](docs/workflow.md)
 - **Decisions log:** [docs/decisions.md](docs/decisions.md) (updated every task)
 
-> **Current status: Day 1, D1-1 to D1-3 done.** Tooling, folder structure, the **mock store API** and a **strict TypeScript** codebase (no `any`, no `@ts-ignore`, enforced by lint) are in place. The screens are still the Week 1 bug board. The data layer (D1-4) comes next. Items marked _(planned, Dx-y)_ arrive with that task.
+> **Current status: Day 1 complete (D1-1 to D1-4).** Tooling, the mock store API, strict TypeScript and a **single data layer** (`src/api/`, the only code allowed to touch the network) are in place. The screens are still the Week 1 bug board; Day 2 replaces them with the product grid.
 
 ---
 
@@ -72,7 +72,7 @@ cp .env.example .env.local   # .env.local is git-ignored
 
 | Variable               | Default  | Purpose                                                                   | Used from |
 | ---------------------- | -------- | ------------------------------------------------------------------------- | --------- |
-| `VITE_API_BASE_URL`    | `/api`   | Base URL the data layer calls (mock or real backend)                      | D1-4      |
+| `VITE_API_BASE_URL`    | `/api`   | Base URL the data layer calls (mock or real backend)                      | ✅ D1-4   |
 | `VITE_USE_MOCK_API`    | `true`   | Serve the API from the in-browser mock. Set `false` to use a real backend | ✅ D1-2   |
 | `VITE_MOCK_LATENCY_MS` | `300`    | Base mock latency, plus up to the same again as random jitter             | ✅ D1-2   |
 | `VITE_STOCK_FEED_URL`  | _(mock)_ | Live stock feed endpoint                                                  | D4-4      |
@@ -95,6 +95,14 @@ Organized **by feature**. Code that belongs to one feature lives together, and o
 bug-bazaar/
 ├── docs/                         # All written tasks (spec, workflow, decisions, …)
 ├── src/
+│   ├── api/                      # Data layer: the ONLY code that touches the network
+│   │   ├── index.ts              # Public entry point (UI imports from here only)
+│   │   ├── client.ts             # request(): base URL, JSON, auth, timeout, errors, validation
+│   │   ├── schemas.ts            # Zod schemas validating every response
+│   │   ├── errors.ts             # ApiRequestError (kind: http/network/timeout/aborted/...)
+│   │   ├── products.ts, auth.ts, orders.ts  # Typed endpoint functions
+│   │   ├── client.test.ts        # Data-layer tests
+│   │   └── bugs.ts               # Legacy Week 1 source (removed in D2-1)
 │   ├── app/                      # App shell: routes, layout, app-wide pages
 │   │   ├── App.tsx
 │   │   └── NotFoundPage.tsx
@@ -113,8 +121,7 @@ bug-bazaar/
 │   │   ├── controls.ts           # Latency + forced-error switches
 │   │   ├── handlers.ts           # The HTTP endpoints
 │   │   ├── handlers.test.ts      # Contract tests
-│   │   ├── browser.ts            # Starts the Service Worker, exposes bazaarMock
-│   │   └── mockApi.ts            # Week 1 bug mock (removed when the board is replaced)
+│   │   └── browser.ts            # Starts the Service Worker, exposes bazaarMock
 │   ├── styles/
 │   │   └── global.css
 │   ├── vite-env.d.ts             # Typed import.meta.env
@@ -141,7 +148,6 @@ Folders added by later tasks _(planned)_:
 
 | Folder                                            | Purpose                                                            | Task  |
 | ------------------------------------------------- | ------------------------------------------------------------------ | ----- |
-| `src/api/`                                        | Single data layer: HTTP client, endpoints, error normalization     | D1-4  |
 | `src/hooks/`                                      | Reusable typed hooks (`useDebounce`, `useLocalStorage`, …)         | D2-5  |
 | `src/store/`                                      | Redux Toolkit: cart and session slices, selectors                  | D3-1  |
 | `src/utils/`                                      | Pure helpers: `formatPrice` (cents → display), query-param parsing | D2-1  |
@@ -150,7 +156,7 @@ Folders added by later tasks _(planned)_:
 **Rules of thumb**
 
 1. A file used by one feature lives in that feature's folder. Move it to `components/` only when a second feature needs it.
-2. Components never talk to the network. They go through `src/api/` (enforced from D1-4).
+2. Components never talk to the network. They call functions from `src/api/index.ts`. ESLint fails on `fetch`, `XMLHttpRequest`, `WebSocket`, `axios` or mock imports anywhere else.
 3. File names: `PascalCase.tsx` for components, `camelCase.ts` for everything else. Import with the extension (`./App.tsx`).
 4. Data from outside the app (JSON, URL params, storage, form values) is `unknown` until a type guard narrows it. No `as` casts on untrusted data.
 
@@ -192,7 +198,7 @@ bazaarMock.reset(); // wipe orders, sessions, stock changes
 | Day | Theme      | Tasks                                                                                                                | Pts | Status |
 | --- | ---------- | -------------------------------------------------------------------------------------------------------------------- | --- | ------ |
 | 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                               | —   | ✅     |
-| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer                                   | 15  | 🟡     |
+| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer ✅                                | 15  | ✅     |
 | 2   | Browse     | D2-1 Product list · D2-2 Filters · D2-3 UI states · D2-4 Effects cleanup · D2-5 Custom hooks · D2-6 Race conditions  | 21  | ⬜     |
 | 3   | Buy        | D3-1 Redux Toolkit · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching                                      | 21  | ⬜     |
 | 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring | 22  | ⬜     |
