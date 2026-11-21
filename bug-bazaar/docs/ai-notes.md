@@ -31,3 +31,22 @@ Log of notable AI use during the Bug Bazaar week (required by D5-7: three AI use
 - **How it was caught:** mutation testing. With both double-submit guards deliberately removed, the test **still passed**. The mock answered instantly, so the first order completed and the page navigated away before the second click landed. The test never reached the situation it claimed to check.
 - **What changed:** the test now holds the first request in flight for 200 ms (an MSW handler that delays, then falls through to the real one). It asserts the button is disabled and reads "Placing your order…" during the request, and that only one request was sent. It fails without the guards and passes with them.
 - **Lesson:** a green test isn't evidence until you've seen it go red for the right reason. For every key guarantee this week (race safety, effect cleanup, idempotency, double-submit), I break the code on purpose and confirm the test catches it.
+
+---
+
+## AI mistake: a double-submit guard that read stale state (D3-2 → caught in D3-3)
+
+- **What happened:** for both checkout (D3-2) and login (D3-3), the AI added an early return, `if (status === "submitting") return`, with a comment claiming it stopped "a second click that lands before React re-renders". It doesn't. The handler's `status` comes from the last render, so until React re-renders, a second event still sees "idle".
+- **Why the tests didn't catch it:** user-event waits between events, so React re-rendered and the **disabled button** blocked the second click. The early return never had to do anything, and a mutation that removed only the button's `disabled` would have been the right check.
+- **How it was caught:** the real-browser check fired click, click and `requestSubmit()` in one task against an 800 ms server. **Three** login requests went out.
+- **What changed:** both guards are now a ref, which changes immediately. New tests fire both events inside one `act()`, so there's no re-render in between. They fail with the old state-based guard and pass with the ref.
+- **Lesson:** a comment describing what code protects against is a claim, not a proof. Test the exact situation the comment names, here "before React re-renders", and make sure the test's tooling doesn't quietly avoid that situation.
+
+---
+
+## AI mistake: an open-redirect check that normalization could bypass (D3-3)
+
+- **What happened:** the AI's first `safeReturnTo` checked the **raw** `?returnTo` value (one leading `/`, no `//`, no `\`) and then returned the URL-normalized path. But normalization can create what the check forbids: `/.//evil.test` passes, and resolving `.` turns it into `//evil.test`, a link to another site.
+- **How it was caught:** mutation testing. Removing a validation line **didn't fail any test**. Every unsafe input in the tests happened to normalize to `/`, the same as the fallback, so the tests couldn't tell "rejected" from "cleaned up". Asking why led to the bypass.
+- **What changed:** the normalized result is checked too. The tests use a distinct fallback (`/fallback`) and include dot-segment inputs. A check that no input could trigger (the origin comparison) was removed as dead code.
+- **Lesson:** validate what you **output**, not only what you received. And when a test's "rejected" value is also a plausible normal result, the test can pass for the wrong reason.

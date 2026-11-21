@@ -190,7 +190,7 @@ Implemented with [MSW](https://mswjs.io/) in `src/mocks/`. It starts automatical
 | ------ | ----------------------- | ------------------------------------------------------------------------ |
 | 400    | `POST /api/login`       | Submit an empty or malformed email, or no password                       |
 | 401    | `POST /api/login`       | Wrong password                                                           |
-| 401    | `GET /api/me`, orders   | Call without a token, or after `bazaarMock.reset()` (sessions are wiped) |
+| 401    | `GET /api/me`, orders   | Call without a token, or after `bazaarMock.expireSessions()` / `reset()` |
 | 404    | `GET /api/products/:id` | Visit a product id that doesn't exist, e.g. `p-9999`                     |
 | 404    | `GET /api/orders/:id`   | Unknown order id, e.g. `o-99999`                                         |
 | 400    | `POST /api/orders`      | Empty `items`, quantity `0`, or unknown product                          |
@@ -206,6 +206,7 @@ bazaarMock.clear(); // stop all forced errors (or clear("login"))
 bazaarMock.latency(2000); // 2–4 s responses (jitter reorders them, D2-6)
 bazaarMock.latency(0, 0); // instant
 bazaarMock.setStock("p-0001", 0); // sold out
+bazaarMock.expireSessions(); // every token stops working: next signed-in call gets 401 (D3-3)
 bazaarMock.reset(); // wipe orders, sessions, stock changes
 ```
 

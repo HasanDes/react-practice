@@ -576,6 +576,7 @@ Global state is only what multiple distant parts of the app must share and chang
 - **Server side** (the mock, D1-2): a repeated key for the same user returns the **original** order without taking stock again.
 - **Considered:** a key per page view in component state (lost on reload, so a reload-then-retry could double-charge); disabling the button only (it stops double-clicks, but not "the response got lost, so the user retries"); generating the order id on the client (works, but the contract has the server assign ids).
 - **The double-click guard** is two layers: the button is disabled while submitting, and the handler returns early if a submit is already in flight (covering a second click that lands before React re-renders).
+  - **Correction (D3-3):** that early return read component _state_, which is stale until React re-renders, so a same-task double click got through. It is now a ref. See D3-3.
 
 ### Checkout flow
 
@@ -592,6 +593,7 @@ Global state is only what multiple distant parts of the app must share and chang
 - **Success:** clear the cart and key, then go to `/orders/:id` with `replace: true`, so Back doesn't return to a finished checkout.
 - **Order confirmation** polls `GET /api/orders/:id` every 3 s until "completed". Status changes are announced in a polite live region. Cleanup aborts the in-flight request and clears the timer (D2-4: a test shows no polls after unmount).
 - **Signed out:** checkout shows "Sign in to check out" linking to `/login?returnTo=/checkout`. The login page itself is D3-3.
+  - **Changed in D3-3:** checkout is now behind `RequireAuth`, which redirects to the login page directly. A 401 at checkout redirects the same way.
 
 ### Proving it
 
@@ -609,3 +611,100 @@ Global state is only what multiple distant parts of the app must share and chang
   - **New key per attempt** (no idempotency): the lost-response test failed. Good.
   - **No double-submit guards:** at first, **the test still passed**. With an instant mock response, the order finished and the page navigated away _before_ the second click, so the test never exercised the in-flight window. I fixed the test by holding the first request in flight for 200 ms. With guards removed it now fails, and with guards restored it passes. A test that can't fail proves nothing.
 - **Real browser:** the stepper stopped at stock 3 with the limit message, the total was correct ($128.95), the cart survived a **real reload**, and checkout showed the sign-in prompt while signed out.
+
+---
+
+## D3-3: Auth
+
+Full write-up, including the token-storage trade-off: [auth.md](auth.md).
+
+### Token storage: `sessionStorage`
+
+- **Used:** `{ token, user }` in `sessionStorage`, validated with a Zod schema on load. It's checked with `GET /api/me` once the mock is up: a 401 ends the session as "expired", while offline or 5xx keeps it.
+- **Considered:**
+  - memory only (every reload signs out)
+  - `localStorage` (same XSS exposure, much longer life, shared by all tabs)
+  - an `httpOnly` cookie (best against token theft, but the shared contract uses a Bearer header, and it needs CSRF protection)
+- **Why:** it survives a reload and dies with the tab. Neither storage protects against XSS. Not running attacker script does: React escaping, no `dangerouslySetInnerHTML`, a CSP in production.
+- **Cost:** a new tab starts signed out (the cart is still there).
+
+### Protecting pages: a `RequireAuth` wrapper
+
+- **Used:** `/account` and `/checkout` are wrapped in `RequireAuth`. Signed out, it renders `<Navigate to="/login?returnTo=…" replace>`. `replace` keeps the protected URL out of history, so Back from login doesn't bounce into the redirect again.
+- **Why a component that reads the store:** it also reacts to a 401 _anywhere_. The session ends, the guard re-renders, and the user is redirected with the current page as the return path. One mechanism covers "not signed in" and "session expired".
+- **Considered:** a loader or `redirect()` (needs the data router, a bigger change than this task); a signed-out branch inside each page (what checkout had in D3-2; duplicated per page).
+- **Not security:** the server checks the token on every call. The guard only decides what to show.
+
+### "A 401 clears the session", including stale 401s
+
+- **Used:** the D3-1 wiring, plus one fix. The client now passes the token a request _sent_ to `onUnauthorized`. The session only ends if that token is still current.
+- **Why:** a slow request with an old token can come back with a 401 after the user signed in again. Without the check, it would sign them out of the new session.
+- A 401 from `POST /api/login` never ends anything: it means wrong credentials, not an expired session.
+
+### Return to where the user was: validated `returnTo`
+
+- **Used:** `loginHref(location)` builds `/login?returnTo=<path+query+hash>`. After sign-in, `safeReturnTo()` accepts only a **local path** (one leading `/`, no `//`, no `\`, no control characters). It checks both the raw value and the normalized result. Anything else goes to `/`, and so does `/login` itself (no loop).
+- **Why both checks:** normalizing can _create_ a dangerous path. `/.//evil.test` passes a raw check, but resolving `.` gives `//evil.test`, which is another site. Mutation testing exposed this. See "Proving it".
+- **Single redirect path:** the login page renders `<Navigate to={returnTo}>` whenever the session is authenticated. A successful submit just dispatches `sessionStarted`, and the same line handles "already signed in".
+
+### The login form
+
+- **State:** `idle | submitting | failed(fieldErrors, message)`.
+- **Errors, by kind and status, with our own copy:**
+  - 400 marks the fields named in `details`.
+  - 401 says "email and password don't match" and clears the password.
+  - Offline, timeout and other failures each get their own message.
+  - Raw server messages never reach the screen (ahead of D3-4).
+- **Focus:** on failure, focus moves to the first invalid field, or to the form message. `flushSync` renders `aria-invalid` and the error text _before_ focus moves, so a screen reader reads them together (groundwork for D4-1).
+- **Can't be double-submitted:** the button is disabled, and a ref guard is checked first. The ref matters: a second submit in the same task arrives before React re-renders, when both the `disabled` attribute and the handler's view of state are still "idle". The checkout button had the same bug from D3-2 and got the same fix.
+
+### Account and logout
+
+- `/account` loads the profile from `GET /api/me` (not the stored copy). An expired token is noticed right there.
+- **Log out** navigates home, then ends the session with `reason: "logout"`. Ending the session first would let `RequireAuth` redirect to the login page instead.
+- The token isn't revoked on the server (the contract has no logout endpoint; noted in auth.md). The cart is kept: it belongs to the device.
+
+### QA
+
+- `bazaarMock.expireSessions()` and a QA panel button, **Expire session (401)**, invalidate every token on the mock server. The next signed-in request gets a real 401, not a forced one.
+
+### Proving it
+
+- **Tests** (`auth.test.tsx`, `returnTo.test.ts`, updated `checkout.test.tsx`):
+  - sign in and return to `returnTo`
+  - an unsafe `returnTo` goes home
+  - a protected page redirects to login and back
+  - wrong password: message focused, password cleared, still signed out
+  - empty fields marked invalid with no request
+  - a server 400 shows our copy, never the server's text
+  - double-click plus Enter sends one request
+  - two submits in the same task send one request
+  - an expired token leads to login with the notice, then back
+  - a late 401 for an old token doesn't end a newer session
+  - a login 401 doesn't end a session
+  - logout
+  - storage saved and removed; corrupt data ignored
+  - the startup check: 401 ends the session, offline keeps it
+  - checkout signed out leads to login and back with the cart; a 401 at checkout keeps the cart and returns after sign-in
+  - a same-task double click at checkout sends one order
+- **Mutation checks:** each guarantee was broken on purpose. These were caught:
+  - login guards removed
+  - stale-token check removed
+  - 401 not ending the session
+  - session not removed on sign-out
+  - the old state-based guard put back on login and on checkout
+
+  Two weren't caught at first:
+  - **`returnTo`: removing a validation line survived.** Every unsafe input in the tests normalized to `/`, the same value as the fallback, so "rejected" and "cleaned up" looked identical. Testing with a distinct fallback (`/fallback`) and thinking about what normalization produces found a real bypass: `/.//evil.test` becomes `//evil.test`. Fixed with the output check. Removing either check now fails a test. The origin check couldn't be made to fail by any input (a local path can't change origin), so it was removed as dead code.
+  - **Double-submit:** the user-event test passed with a state-based guard, because user-event yields between events and the disabled button did all the work. The browser check found it (below).
+
+- **Real browser** (headless Edge against the production build):
+  - `/account` signed out redirected to `/login?returnTo=%2Faccount`
+  - wrong password showed the message, focused it, and cleared the password
+  - **click, click, submit in one task with an 800 ms server sent 3 login requests** on the first run, and **1** after the ref fix; the button showed "Signing in…" and was disabled
+  - signed in, back on `/account` with the name in the header
+  - a real reload kept the session
+  - `expireSessions()` plus a reload led to the login page with "Your session expired", and the stored session was gone
+  - `returnTo=/.//evil.test` stayed on the same origin
+  - logout went home, showed "Sign in", and the storage was cleared
+  - no console errors
