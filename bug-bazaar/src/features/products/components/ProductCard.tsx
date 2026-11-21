@@ -4,7 +4,7 @@ import { StarIcon } from "../../../components/icons.tsx";
 import type { Product } from "../../../types/api.ts";
 import { formatPrice } from "../../../utils/formatPrice.ts";
 import type { FromListState } from "../navigation.ts";
-import StockStatus from "./StockStatus.tsx";
+import { LiveStockStatus } from "../../stock/components.tsx";
 
 type ProductCardProps = {
   /** Card titles sit one level below the section heading: 2 in the main list (under the page's h1), 3 in Related (under its h2). */
@@ -76,7 +76,7 @@ export default memo(function ProductCard({
           </Link>
         </Heading>
         <p className="product-card__price">{formatPrice(price)}</p>
-        <StockStatus stock={stock} />
+        <LiveStockStatus productId={id} stock={stock} />
         <p className="product-card__rating">
           <StarIcon className="product-card__star" />
           <span className="visually-hidden">Rated </span>

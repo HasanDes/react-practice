@@ -2,10 +2,12 @@ import { combineReducers, configureStore } from "@reduxjs/toolkit";
 import { useDispatch, useSelector } from "react-redux";
 import { sessionReducer } from "../features/auth/sessionSlice.ts";
 import { cartReducer } from "../features/cart/cartSlice.ts";
+import { liveStockReducer } from "../features/stock/liveStockSlice.ts";
 
 const rootReducer = combineReducers({
   cart: cartReducer,
   session: sessionReducer,
+  liveStock: liveStockReducer,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;

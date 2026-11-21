@@ -99,6 +99,21 @@ export type Order = {
   status: OrderStatus;
 };
 
+// --- Live stock feed (D4-4) ---------------------------------------------------
+// WebSocket at /api/stock. JSON text frames. See docs/api-contract.md.
+
+/** Client → server: replace the set of products this client wants updates for. */
+export type StockFeedClientMessage = { type: "subscribe"; productIds: string[] };
+
+/** Server → client. */
+export type StockFeedServerMessage =
+  /** Current stock for every subscribed product: sent after each subscribe. */
+  | { type: "snapshot"; stock: Record<string, number> }
+  /** One product's stock changed. */
+  | { type: "stock"; productId: string; stock: number }
+  /** Heartbeat, every 10 s, so a silently dead connection can be detected. */
+  | { type: "ping" };
+
 // --- Type guards ---------------------------------------------------------------
 // Narrow untrusted strings (URL params, JSON) to contract unions without casts.
 

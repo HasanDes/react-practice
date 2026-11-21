@@ -24,8 +24,9 @@ import { useRequest } from "../../../hooks/useRequest.ts";
 import type { Product } from "../../../types/api.ts";
 import { formatPrice } from "../../../utils/formatPrice.ts";
 import AddToCart from "../../cart/components/AddToCart.tsx";
+import { LiveStockStatus } from "../../stock/components.tsx";
+import { useLiveStock } from "../../stock/liveStock.tsx";
 import ProductGrid from "../components/ProductGrid.tsx";
-import StockStatus from "../components/StockStatus.tsx";
 import { CATALOG_STALE_MS, productKey, relatedKey, RELATED_STALE_MS } from "../catalogCache.ts";
 import { CATEGORY_LABELS } from "../filters.ts";
 import { listSearchFrom, productListHref } from "../navigation.ts";
@@ -88,6 +89,9 @@ function ProductDetailPage({ id }: { id: string }) {
 
 function ProductDetails({ product }: { product: Product }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
+  // Live (D4-4): the feed's number while this page is open, so Add to cart's
+  // limit follows other shoppers' purchases too.
+  const stock = useLiveStock(product.id, product.stock);
 
   // Route change: move focus to the new page's heading, so screen reader users
   // hear where they landed instead of staying on a link that no longer exists.
@@ -109,8 +113,8 @@ function ProductDetails({ product }: { product: Product }) {
           {product.name}
         </h1>
         <p className="product-detail__price">{formatPrice(product.price)}</p>
-        <StockStatus stock={product.stock} />
-        <AddToCart product={product} />
+        <LiveStockStatus productId={product.id} stock={product.stock} announce />
+        <AddToCart product={{ ...product, stock }} />
         <dl className="product-detail__facts">
           <dt>Category</dt>
           <dd>{CATEGORY_LABELS[product.category]}</dd>

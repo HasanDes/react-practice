@@ -149,6 +149,42 @@ GET /api/orders/o-00001 → 200 { "id": "o-00001", "status": "processing" }
 | 401    | Not logged in                                                          | `UNAUTHORIZED`    |
 | 404    | No such order, **or it belongs to another user** (ids can't be probed) | `ORDER_NOT_FOUND` |
 
+### WebSocket `/api/stock`: live stock (D4-4)
+
+A push channel for stock changes. Same origin and base path as HTTP: `ws://` or `wss://` + host + `/api/stock` (the client builds it with `apiWebSocketUrl("/stock")`). No auth: stock is public. JSON text frames.
+
+**Client → server**
+
+| Message                                                       | Meaning                                                                                                                                                  |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{ "type": "subscribe", "productIds": ["p-0001", "p-0042"] }` | Replace the set of products this connection wants updates for. Send it after connecting and whenever what's on screen changes. An empty list means none. |
+
+**Server → client**
+
+| Message                                                         | When                                                                                                                       |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `{ "type": "snapshot", "stock": { "p-0001": 7, "p-0042": 0 } }` | After every `subscribe`: the current stock of each subscribed product. After a reconnect, this fills in everything missed. |
+| `{ "type": "stock", "productId": "p-0001", "stock": 6 }`        | A subscribed product's stock changed (an order, a restock, another shopper).                                               |
+| `{ "type": "ping" }`                                            | Every 10 s. A client that hears nothing for 25 s should assume the connection is dead and reconnect.                       |
+
+Unknown or malformed frames are ignored by both sides. Stock values are integers ≥ 0.
+
+**Close codes the server uses:** `1012` (restarting: reconnect), `1013` (try again later: reconnect with backoff).
+
+**Client expectations** (what `src/api/stockFeed.ts` does):
+
+- **Reconnect:** with exponential backoff and jitter (1 s, 2 s, 4 s … 30 s), resetting after a successful connection, and at once when the browser comes back online.
+- **Re-subscribe after every reconnect:** the snapshot is the source of truth.
+- **Disconnect:** when nothing is watched, when the tab is hidden, and on `pagehide`.
+
+**Mock:** `src/mocks/stockFeed.ts`. While a client is subscribed, a random watched product sells or is restocked every 4 s. Controls:
+
+- `bazaarMock.liveStock.drop()`: disconnect everyone.
+- `bazaarMock.liveStock.outage(ms)`: refuse connections for a while.
+- `bazaarMock.liveStock.rate(ms)`: random-sale interval; `rate(0)` stops it.
+- `bazaarMock.liveStock.status()`.
+- The QA panel has buttons for the first two.
+
 ## Error codes
 
 | Code                  | Status | Meaning                                                                |

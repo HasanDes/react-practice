@@ -108,6 +108,14 @@ export default function QaPanel() {
         >
           Expire session (401)
         </button>
+        {/* Live stock (D4-4): the client reconnects with backoff; the outage
+            makes it retry a few times before the server accepts it again. */}
+        <button type="button" onClick={() => mock.liveStock.drop()}>
+          Drop live stock
+        </button>
+        <button type="button" onClick={() => mock.liveStock.outage(15_000)}>
+          Live stock outage (15 s)
+        </button>
         <button
           type="button"
           onClick={() => {

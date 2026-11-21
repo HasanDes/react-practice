@@ -64,3 +64,17 @@ export const apiErrorBodySchema = z.object({
     details: z.optional(z.record(z.string(), z.string())),
   }),
 });
+
+/** Live stock feed messages (D4-4). Unknown or malformed frames fail and are ignored. */
+export const stockFeedMessageSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("snapshot"),
+    stock: z.record(z.string(), z.int().check(z.minimum(0))),
+  }),
+  z.object({
+    type: z.literal("stock"),
+    productId: z.string(),
+    stock: z.int().check(z.minimum(0)),
+  }),
+  z.object({ type: z.literal("ping") }),
+]);

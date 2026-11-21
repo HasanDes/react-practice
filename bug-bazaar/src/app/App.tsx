@@ -6,6 +6,7 @@ import AccountPage from "../features/auth/pages/AccountPage.tsx";
 import LoginPage from "../features/auth/pages/LoginPage.tsx";
 import CartLink from "../features/cart/components/CartLink.tsx";
 import CartPage from "../features/cart/pages/CartPage.tsx";
+import { LiveStockIndicator } from "../features/stock/components.tsx";
 import CheckoutPage from "../features/orders/pages/CheckoutPage.tsx";
 import OrderConfirmationPage from "../features/orders/pages/OrderConfirmationPage.tsx";
 import ProductDetailRoute from "../features/products/pages/ProductDetailPage.tsx";
@@ -34,6 +35,7 @@ export default function App() {
             The Bug Bazaar
           </Link>
         </p>
+        <LiveStockIndicator />
         <nav aria-label="Main" className="site-nav">
           <AccountLink />
           <CartLink />

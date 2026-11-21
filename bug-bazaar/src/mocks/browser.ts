@@ -7,6 +7,7 @@ import { ROUTE_ERRORS } from "./contract.ts";
 import { createControls, isMockRoute, type MockControls } from "./controls.ts";
 import { createDb, DEMO_USER, type MockDb } from "./db.ts";
 import { createHandlers } from "./handlers.ts";
+import { createStockFeedServer, type StockFeedServer } from "./stockFeed.ts";
 
 type ControlsSnapshot = ReturnType<MockControls["snapshot"]>;
 
@@ -22,6 +23,13 @@ export type BazaarMockConsole = {
   setStock: (productId: string, stock: number) => Product | undefined;
   reset: () => string;
   expireSessions: () => string;
+  /** Live stock feed (D4-4). */
+  liveStock: {
+    drop: () => string;
+    outage: (ms?: number) => string;
+    rate: (ms: number) => string;
+    status: () => { connections: number; rateMs: number };
+  };
   status: () => ControlsSnapshot;
   help: () => void;
 };
@@ -33,15 +41,20 @@ declare global {
   }
 }
 
+/** How often a watched product sells (or is restocked) in the demo. */
+const LIVE_STOCK_RATE_MS = 4000;
+
 export async function startMockApi(): Promise<void> {
   const latencyMs = Number(import.meta.env.VITE_MOCK_LATENCY_MS ?? 300);
   const storage = window.localStorage;
 
   const db = createDb({ storage });
   const controls = createControls({ storage, latencyMs, jitterMs: latencyMs });
-  const worker = setupWorker(...createHandlers({ db, controls }));
+  // Live stock: a random sale among watched products every few seconds.
+  const stockFeed = createStockFeedServer({ db, rateMs: LIVE_STOCK_RATE_MS });
+  const worker = setupWorker(...createHandlers({ db, controls }), stockFeed.handler);
 
-  window.bazaarMock = createConsoleApi(db, controls);
+  window.bazaarMock = createConsoleApi(db, controls, stockFeed);
 
   await worker.start({
     // Let Vite's own requests (modules, HMR, images) go straight to the network.
@@ -57,8 +70,30 @@ export async function startMockApi(): Promise<void> {
   );
 }
 
-function createConsoleApi(db: MockDb, controls: MockControls): BazaarMockConsole {
+function createConsoleApi(
+  db: MockDb,
+  controls: MockControls,
+  stockFeed: StockFeedServer,
+): BazaarMockConsole {
   return {
+    liveStock: {
+      /** Disconnect every client, as if the server restarted. They reconnect with backoff. */
+      drop: () => {
+        stockFeed.drop();
+        return "Live stock connections dropped. Clients will reconnect.";
+      },
+      /** Refuse connections for a while (default 15 s): watch the backoff, then recovery. */
+      outage: (ms = 15_000) => {
+        stockFeed.outage(ms);
+        return `Live stock refusing connections for ${String(ms / 1000)} s.`;
+      },
+      /** Random sales every ms (0 stops them). */
+      rate: (ms) => {
+        stockFeed.setRate(ms);
+        return ms > 0 ? `A random sale every ${String(ms)} ms.` : "Random sales stopped.";
+      },
+      status: () => ({ connections: stockFeed.connections, rateMs: stockFeed.rateMs }),
+    },
     /** bazaarMock.fail("products:list", 500) or bazaarMock.fail("orders:create", 409, { once: true }) */
     fail: (route, status, options) => {
       controls.fail(route, status, options);
@@ -115,6 +150,9 @@ function createConsoleApi(db: MockDb, controls: MockControls): BazaarMockConsole
           "bazaarMock.race(stepMs?) / race(0)         out-of-order search responses (D2-6)",
           "bazaarMock.setStock(productId, n)          change stock",
           "bazaarMock.expireSessions()                every token stops working (401)",
+          "bazaarMock.liveStock.drop()                drop live stock connections (they reconnect)",
+          "bazaarMock.liveStock.outage(ms?)           refuse live stock connections for a while",
+          "bazaarMock.liveStock.rate(ms) / rate(0)    random sales every ms / stop them",
           "bazaarMock.reset()                         wipe orders/sessions/stock changes",
           "bazaarMock.status()                        show current controls",
         ].join("\n"),

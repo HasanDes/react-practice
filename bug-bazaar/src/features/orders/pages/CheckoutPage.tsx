@@ -13,6 +13,8 @@ import {
 } from "../../cart/cartSlice.ts";
 import { cartSignature, clearCheckoutKey, getCheckoutKey } from "../checkoutKey.ts";
 import { placeOrder, type CheckoutProblem } from "../placeOrder.ts";
+import { StockNotices } from "../../stock/components.tsx";
+import { useWatchStock } from "../../stock/liveStock.tsx";
 
 /** One status at a time: "submitting with an error" can't be represented. */
 type CheckoutStatus =
@@ -23,6 +25,7 @@ export default function CheckoutPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const items = useAppSelector(selectCartItems);
+  useWatchStock(items.map((item) => item.productId)); // live stock while checking out (D4-4)
   const count = useAppSelector(selectCartCount);
   const total = useAppSelector(selectCartTotal);
   const [checkout, setCheckout] = useState<CheckoutStatus>({ status: "idle" });
@@ -83,6 +86,7 @@ export default function CheckoutPage() {
       <h1 id="checkout-heading" className="page-heading">
         Checkout
       </h1>
+      <StockNotices />
 
       <ul className="checkout__lines">
         {items.map((item) => (

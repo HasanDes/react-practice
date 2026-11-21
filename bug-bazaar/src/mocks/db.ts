@@ -90,6 +90,11 @@ export function createDb({
   const users: StoredUser[] = [DEMO_USER];
 
   let state = load();
+  /** Notified whenever a product's stock changes (D4-4: the live stock feed). */
+  const stockListeners = new Set<(productId: string, stock: number) => void>();
+  const emitStock = (productId: string, stock: number) => {
+    for (const listener of stockListeners) listener(productId, stock);
+  };
 
   function load(): DbState {
     try {
@@ -141,6 +146,13 @@ export function createDb({
     setStock(id: string, stock: number): void {
       state.stock[id] = Math.max(0, stock);
       save();
+      emitStock(id, state.stock[id]);
+    },
+
+    /** Listen for stock changes (setStock and placed orders). Returns unsubscribe. */
+    onStockChange(listener: (productId: string, stock: number) => void): () => void {
+      stockListeners.add(listener);
+      return () => stockListeners.delete(listener);
     },
 
     login(email: string, password: string): { token: string; user: User } | null {
@@ -209,6 +221,7 @@ export function createDb({
       state.orders[id] = { id, userId, items, createdAt: now() };
       if (replayKey) state.idempotency[replayKey] = id;
       save();
+      for (const { product, quantity } of lines) emitStock(product.id, product.stock - quantity);
 
       return { ok: true, replayed: false, order: { id, status: "queued" } };
     },

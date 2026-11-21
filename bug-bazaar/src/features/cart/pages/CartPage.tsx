@@ -13,11 +13,15 @@ import {
 } from "../cartSlice.ts";
 import type { CartItem } from "../cartSlice.ts";
 import QuantityStepper from "../components/QuantityStepper.tsx";
+import { StockNotices } from "../../stock/components.tsx";
+import { useWatchStock } from "../../stock/liveStock.tsx";
 
 /** Edit quantities, remove lines, see the derived total, go to checkout. */
 export default function CartPage() {
   const dispatch = useAppDispatch();
   const items = useAppSelector(selectCartItems);
+  // Live stock for every line while the cart is open (D4-4).
+  useWatchStock(items.map((item) => item.productId));
   const count = useAppSelector(selectCartCount);
   const total = useAppSelector(selectCartTotal);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -50,6 +54,7 @@ export default function CartPage() {
       <h1 id="cart-heading" ref={headingRef} tabIndex={-1} className="page-heading">
         Your cart
       </h1>
+      <StockNotices />
       {/* Always rendered, so it exists before its text changes (reliable announcements). */}
       <p role="status" className="visually-hidden" data-testid="cart-announcement">
         {announcement}

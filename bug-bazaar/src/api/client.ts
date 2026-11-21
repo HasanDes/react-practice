@@ -50,6 +50,17 @@ export function configureApiClient(overrides: Partial<ApiClientConfig>): () => v
   };
 }
 
+/**
+ * The WebSocket URL for an API path (D4-4), from the same base URL as HTTP:
+ * "/api" + "/stock" on https://shop.example → wss://shop.example/api/stock.
+ */
+export function apiWebSocketUrl(path: string): string {
+  const base = config.baseUrl.replace(/\/+$/, "");
+  const url = new URL(`${base}${path}`, window.location.href);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return url.toString();
+}
+
 export type QueryValue = string | number | boolean | null | undefined;
 
 export type RequestOptions<T> = {
