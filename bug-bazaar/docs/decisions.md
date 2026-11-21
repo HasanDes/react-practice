@@ -497,3 +497,50 @@ Typing "duck" can send requests for `d`, `du`, `duc` and `duck`. Responses can c
 
 - **Why not just debounce?** A debounce reduces requests but doesn't order responses. Any pause longer than the debounce sends another request.
 - **Why abort rather than compare ids?** Both prevent stale writes. Aborting also stops the work and shows up in DevTools as "(canceled)". On a real backend with an HTTP/1.1 connection limit, it frees the connection for the request that matters.
+
+---
+
+## D3-1: Redux Toolkit
+
+### What lives in the global store, and what doesn't
+
+| State                         | Where                                              | Why                                                                                                    |
+| ----------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Cart lines                    | Redux `cart` slice                                 | Shared by the header badge, details page and cart page. Must survive navigation (and reload, in D3-2). |
+| Session (token + user)        | Redux `session` slice                              | Read by the API client, the header and route guards (D3-3).                                            |
+| Filters, sort, page           | URL (D2-2)                                         | Shareable and Back-able. Redux would break both.                                                       |
+| Server data (products)        | `useRequest` (D2-5); a caching layer comes in D3-5 | It's a copy of the server's data, not app state.                                                       |
+| Form drafts, "added" messages | Component state                                    | Nobody else needs them.                                                                                |
+
+Global state is only what multiple distant parts of the app must share and change.
+
+### Slices and "defined updates"
+
+- **Cart:** the actions `itemAdded`, `quantityChanged`, `itemRemoved` and `cartCleared` are the _only_ ways to change it.
+  - Business rules sit in the reducer, in one place: quantities are clamped to `0…stock`, adding merges with an existing line, quantity 0 removes the line, and sold-out products are ignored. The UI can't put the cart into an invalid state even by accident.
+  - Lines store a **snapshot** (name, price, image, stock), so the cart page and badge work without refetching every product. D3-2 refreshes stock and price at checkout.
+- **Session:** a discriminated union, `{ status: "anonymous", endedBecause } | { status: "authenticated", token, user }`. "A token but no user" can't be represented, the same idea as `RequestState` in D1-3. `endedBecause: "expired"` lets D3-3 tell the user _why_ they were signed out.
+- **Enforced at runtime too:** Immer freezes the state it produces. A test shows that pushing to `state.cart.items` or assigning `line.quantity` **throws** `TypeError` outside a reducer. In development, RTK's default middleware also flags mutations and non-serializable values.
+- **TypeScript gotcha:** writing `const initialState: SessionState = { status: "anonymous", … }` _narrows_ the constant to the anonymous member, and `createSlice` then infers that as the slice's only state. A tiny `anonymous()` factory with a `SessionState` return type keeps the full union without a cast.
+
+### Derived values: count and total are never stored
+
+- **Used:** `selectCartCount` (sum of quantities) and `selectCartTotal` (sum of `price × quantity`, in **cents**) built with `createSelector`. The header badge (`CartLink`) and the cart page read these. Nothing stores a count or total that could drift.
+- **Memoized:** they recompute only when `cart.items` changes. A test uses `recomputations()` to show that an unrelated session update doesn't recompute the count.
+- **Accessible badge:** the link's name is "Cart, 2 items" (the visual number is `aria-hidden`), and "Added to cart" is announced in a polite live region without moving focus.
+
+### Wiring the store to the data layer
+
+- **Used:** `connectApiToStore(store)` passes `configureApiClient` (the D1-4 injection point) a `getToken` that reads the session, and an `onUnauthorized` that dispatches `sessionEnded({ reason: "expired" })`. It's called once in `main.tsx`.
+- **Why:** the API layer never imports the store, and the store doesn't import the API client, so there's no import cycle. A test runs real requests through MSW to show that the token is sent, and that a 401 on an authenticated call ends the session. (D3-3 builds the login/logout UI on top.)
+
+### Store factory and tests
+
+- **`makeStore()`, not a module singleton:** the app creates one store; every test (`TestApp`) gets a fresh one, so cart state can't leak between tests.
+- **Typed hooks** (`useAppSelector`, `useAppDispatch` via `.withTypes()`): components get `RootState` / `AppDispatch` without annotations.
+
+### Considered
+
+- **Zustand / React context + `useReducer`:** less boilerplate, but the task asks for Redux Toolkit. RTK's selectors, frozen state and DevTools time-travel also make the "defined updates" guarantee concrete and inspectable.
+- **RTK Query now:** it would replace `useRequest` with a cached data layer. That's D3-5's topic (caching), and `useRequest`'s keys were designed to map onto query keys.
+- **Persisting the cart now:** "the cart survives a reload" is a D3-2 criterion, so it lands there.

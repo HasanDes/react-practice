@@ -6,7 +6,7 @@ A small React + TypeScript (strict) store that sells developer gear: rubber duck
 - **Dev → QA workflow:** [docs/workflow.md](docs/workflow.md)
 - **Decisions log:** [docs/decisions.md](docs/decisions.md) (updated every task)
 
-> **Current status: Day 2 complete (D2-1 to D2-6).** Product grid and details page, URL-based filters, consistent UI states, effects that clean up, typed custom hooks, and **race-safe search**: typing fast never shows results for an old query, even with deliberately out-of-order responses. Day 3 (cart, auth, Redux Toolkit) comes next.
+> **Current status: Day 3 in progress. D3-1 done.** Browsing is complete (Day 2). A **Redux Toolkit store** now holds the cart and session: Add to cart on product pages, a header badge showing the derived item count, and a cart page with the derived total. Cart editing, persistence and checkout (D3-2) come next.
 
 ---
 
@@ -111,6 +111,8 @@ bug-bazaar/
 │   │   └── states.tsx            # LoadingState (skeletons), EmptyState, ErrorState
 │   ├── dev/QaPanel.tsx           # QA panel: trigger any UI state (mock only, lazy chunk)
 │   ├── features/                 # One folder per feature: its pages + components
+│   │   ├── auth/sessionSlice.ts  # Session: anonymous | authenticated (token + user)
+│   │   ├── cart/                 # cartSlice (actions + derived selectors), CartLink, AddToCart, CartPage
 │   │   └── products/
 │   │       ├── components/       # Presentational: ProductFilters, ProductGrid, ProductCard, StockStatus, Pagination
 │   │       ├── pages/            # Containers: ProductsPage (/), ProductDetailPage (/products/:id, + related)
@@ -126,6 +128,9 @@ bug-bazaar/
 │   │   ├── handlers.ts           # The HTTP endpoints
 │   │   ├── handlers.test.ts      # Contract tests
 │   │   └── browser.ts            # Starts the Service Worker, exposes bazaarMock
+│   ├── store/
+│   │   ├── store.ts              # makeStore(), RootState, typed hooks
+│   │   └── connectApi.ts         # Session token → API client; 401 → session ended
 │   ├── styles/
 │   │   └── global.css
 │   ├── test/setup.ts             # Test setup (DOM matchers, cleanup)
@@ -161,10 +166,9 @@ bug-bazaar/
 
 Folders added by later tasks _(planned)_:
 
-| Folder                                | Purpose                                           | Task |
-| ------------------------------------- | ------------------------------------------------- | ---- |
-| `src/store/`                          | Redux Toolkit: cart and session slices, selectors | D3-1 |
-| `src/features/cart`, `auth`, `orders` | Store features                                    | D3   |
+| Folder                | Purpose        | Task |
+| --------------------- | -------------- | ---- |
+| `src/features/orders` | Store features | D3   |
 
 **Rules of thumb**
 
@@ -218,7 +222,7 @@ bazaarMock.reset(); // wipe orders, sessions, stock changes
 | 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                                                | —   | ✅     |
 | 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer ✅                                                 | 15  | ✅     |
 | 2   | Browse     | D2-1 Product list ✅ · D2-2 Filters ✅ · D2-3 UI states ✅ · D2-4 Effects cleanup ✅ · D2-5 Custom hooks ✅ · D2-6 Race conditions ✅ | 21  | ✅     |
-| 3   | Buy        | D3-1 Redux Toolkit · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching                                                       | 21  | ⬜     |
+| 3   | Buy        | D3-1 Redux Toolkit ✅ · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching                                                    | 21  | 🟡     |
 | 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring                  | 22  | ⬜     |
 | 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission                                         | 21  | ⬜     |
 
