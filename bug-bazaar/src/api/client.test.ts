@@ -22,7 +22,7 @@ const server = setupServer();
 let db: MockDb;
 let token: string | null;
 let restoreConfig: () => void;
-const onUnauthorized = vi.fn<(error: ApiRequestError) => void>();
+const onUnauthorized = vi.fn<(error: ApiRequestError, token: string | null) => void>();
 
 beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
 afterAll(() => server.close());
@@ -106,7 +106,7 @@ describe("auth", () => {
     token = "expired-token";
     const error = await failure(getMe());
     expect(error.status).toBe(401);
-    expect(onUnauthorized).toHaveBeenCalledWith(error);
+    expect(onUnauthorized).toHaveBeenCalledWith(error, "expired-token");
   });
 
   it("a 401 from login (wrong password) does NOT log anyone out", async () => {

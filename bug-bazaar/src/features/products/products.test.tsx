@@ -82,10 +82,11 @@ describe("product grid", () => {
     const first = catalogProduct(1);
     const second = catalogProduct(2);
 
-    // Skip link → site title → cart → each filter control → first card. One Tab stop per card.
+    // Skip link → site title → sign in → cart → each filter control → first card. One Tab stop per card.
     const expectedOrder = [
       screen.getByRole("link", { name: "Skip to content" }),
       screen.getByRole("link", { name: /the bug bazaar/i }),
+      screen.getByRole("link", { name: "Sign in" }),
       screen.getByRole("link", { name: "Cart, 0 items" }),
       screen.getByRole("searchbox", { name: "Search" }),
       screen.getByRole("combobox", { name: "Category" }),

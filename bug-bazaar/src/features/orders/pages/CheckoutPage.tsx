@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { EmptyState } from "../../../components/states.tsx";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle.ts";
 import { useAppDispatch, useAppSelector } from "../../../store/store.ts";
 import { formatPrice } from "../../../utils/formatPrice.ts";
-import { selectIsAuthenticated } from "../../auth/sessionSlice.ts";
 import {
   cartCleared,
   selectCartCount,
@@ -19,14 +18,15 @@ import { placeOrder, type CheckoutProblem } from "../placeOrder.ts";
 type CheckoutStatus =
   { status: "idle" } | { status: "submitting" } | { status: "failed"; problem: CheckoutProblem };
 
+/** Rendered inside RequireAuth (see App routes): only signed-in users get here. */
 export default function CheckoutPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const items = useAppSelector(selectCartItems);
   const count = useAppSelector(selectCartCount);
   const total = useAppSelector(selectCartTotal);
-  const signedIn = useAppSelector(selectIsAuthenticated);
   const [checkout, setCheckout] = useState<CheckoutStatus>({ status: "idle" });
+  const inFlight = useRef(false);
   useDocumentTitle("Checkout");
 
   if (items.length === 0) {
@@ -48,15 +48,20 @@ export default function CheckoutPage() {
   }
 
   async function handlePlaceOrder() {
-    // The button is disabled while submitting; this guard also covers a
-    // second click that lands before React re-renders.
-    if (checkout.status === "submitting") return;
+    // Two layers: the button is disabled while submitting, and this ref stops
+    // a second click that lands before React re-renders. It must be a ref:
+    // `checkout` in this closure still says "idle" until the next render (the
+    // first version checked that state and let a same-task double click
+    // through; found in D3-3's browser check).
+    if (inFlight.current) return;
+    inFlight.current = true;
     setCheckout({ status: "submitting" });
 
     // Same cart → same key, across retries and reloads, so a retry after a
     // lost response returns the original order instead of a second one.
     const signature = cartSignature(items);
     const result = await placeOrder(items, getCheckoutKey(signature));
+    inFlight.current = false;
 
     if (result.ok) {
       clearCheckoutKey(signature);
@@ -96,33 +101,24 @@ export default function CheckoutPage() {
 
       {checkout.status === "failed" && <ProblemMessage problem={checkout.problem} />}
 
-      {signedIn ? (
-        <div className="checkout__actions">
-          <button
-            type="button"
-            className="button button--primary"
-            onClick={() => void handlePlaceOrder()}
-            disabled={submitting}
-            aria-disabled={submitting}
-          >
-            {submitting
-              ? "Placing your order…"
-              : checkout.status === "failed" && checkout.problem.kind === "retryable"
-                ? "Try again"
-                : "Place order"}
-          </button>
-          <Link to="/cart" className="button">
-            Back to cart
-          </Link>
-        </div>
-      ) : (
-        <div className="checkout__signin">
-          <p>Sign in to place your order. Your cart will be waiting.</p>
-          <Link to="/login?returnTo=%2Fcheckout" className="button button--primary">
-            Sign in to check out
-          </Link>
-        </div>
-      )}
+      <div className="checkout__actions">
+        <button
+          type="button"
+          className="button button--primary"
+          onClick={() => void handlePlaceOrder()}
+          disabled={submitting}
+          aria-disabled={submitting}
+        >
+          {submitting
+            ? "Placing your order…"
+            : checkout.status === "failed" && checkout.problem.kind === "retryable"
+              ? "Try again"
+              : "Place order"}
+        </button>
+        <Link to="/cart" className="button">
+          Back to cart
+        </Link>
+      </div>
     </section>
   );
 }

@@ -20,8 +20,12 @@ export type ApiClientConfig = {
   timeoutMs: number;
   /** Returns the current session token, or null when logged out. */
   getToken: () => string | null;
-  /** Called when an authenticated request gets 401, so the session can be cleared. */
-  onUnauthorized: (error: ApiRequestError) => void;
+  /**
+   * Called when an authenticated request gets 401, so the session can be
+   * cleared. `token` is the one that request sent, so a late 401 for an old
+   * token can be told apart from one for the current session.
+   */
+  onUnauthorized: (error: ApiRequestError, token: string | null) => void;
 };
 
 const defaultConfig: ApiClientConfig = {
@@ -149,7 +153,7 @@ export async function request<T>(path: string, options: RequestOptions<T>): Prom
     });
     // Only authenticated calls mean "session expired". A 401 from login means
     // wrong credentials and must not log anyone out.
-    if (response.status === 401 && auth) config.onUnauthorized(error);
+    if (response.status === 401 && auth) config.onUnauthorized(error, token);
     throw error;
   }
 

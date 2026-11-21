@@ -95,6 +95,19 @@ export default function QaPanel() {
         <button type="button" onClick={() => navigate("/products/p-9999")}>
           Not found (404)
         </button>
+        {/* The token stops working; going to the account page makes the
+            signed-in request that gets the 401 (D3-3). */}
+        <button
+          type="button"
+          onClick={() => {
+            mock.expireSessions();
+            // Already there: reload, and the startup token check gets the 401.
+            if (location.pathname === "/account") reload();
+            else navigate("/account");
+          }}
+        >
+          Expire session (401)
+        </button>
         <button
           type="button"
           onClick={() => {

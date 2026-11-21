@@ -74,6 +74,12 @@ function renderAt(path: string, withStore: AppStore) {
   return { user, ...view };
 }
 
+async function signIn(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText("Email"), DEMO_USER.email);
+  await user.type(screen.getByLabelText("Password"), DEMO_USER.password);
+  await user.click(screen.getByRole("button", { name: "Sign in" }));
+}
+
 const addToCart = (id: string, quantity: number): void =>
   act(() => {
     store.dispatch(itemAdded({ product: product(id), quantity }));
@@ -145,14 +151,19 @@ describe("the cart survives a reload", () => {
 });
 
 describe("checkout", () => {
-  it("signed out: asks to sign in instead of offering Place order", () => {
-    renderAt("/checkout", makeStore());
+  it("signed out: sends the user to sign in, then back to checkout with the cart", async () => {
+    const anonymousStore = makeStore();
+    disconnect = connectApiToStore(anonymousStore);
+    const { user } = renderAt("/checkout", anonymousStore);
     addToCart("p-0001", 1);
-    expect(screen.getByRole("link", { name: "Sign in to check out" })).toHaveAttribute(
-      "href",
-      "/login?returnTo=%2Fcheckout",
-    );
+
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Place order" })).not.toBeInTheDocument();
+    await signIn(user);
+
+    expect(await screen.findByRole("button", { name: "Place order" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Checkout" })).toBeInTheDocument();
+    expect(badge()).toBe("1");
   });
 
   it("places the order, clears the cart and shows a confirmation", async () => {
@@ -190,6 +201,28 @@ describe("checkout", () => {
     await user.dblClick(button);
     expect(button).toBeDisabled();
     expect(button).toHaveTextContent("Placing your order…");
+    await screen.findByRole("heading", { name: /your order is placed/i });
+    expect(orderPosts).toHaveLength(1);
+  });
+
+  it("can't be double-submitted even when both clicks land before React re-renders", async () => {
+    // Inside one act() React doesn't re-render between the clicks, so the
+    // button isn't disabled yet: only the ref guard can stop the second one.
+    // (The D3-2 guard read component state and let this through.)
+    server.use(
+      http.post("*/api/orders", async () => {
+        await delay(200);
+        return undefined;
+      }),
+    );
+    renderAt("/checkout", signedInStore());
+    addToCart("p-0001", 1);
+    const button = screen.getByRole("button", { name: "Place order" });
+
+    act(() => {
+      button.click();
+      button.click();
+    });
     await screen.findByRole("heading", { name: /your order is placed/i });
     expect(orderPosts).toHaveLength(1);
   });
@@ -258,15 +291,19 @@ describe("checkout", () => {
     expect(db.getOrder("o-00002", DEMO_USER.id)).toBeNull();
   });
 
-  it("a 401 at checkout explains the session expired and keeps the cart", async () => {
+  it("a 401 at checkout ends the session, keeps the cart, and returns here after sign-in", async () => {
     const { user } = renderAt("/checkout", signedInStore());
     addToCart("p-0001", 1);
-    server.use(http.post("*/api/orders", () => new HttpResponse(null, { status: 401 })));
+    db.expireSessions(); // the token stops working on the server
 
     await user.click(screen.getByRole("button", { name: "Place order" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Your session has expired");
+    expect(await screen.findByText(/your session expired/i)).toHaveAttribute("role", "status");
+    expect(store.getState().session).toEqual({ status: "anonymous", endedBecause: "expired" });
     expect(badge()).toBe("1");
-    expect(screen.getByRole("link", { name: "Sign in to check out" })).toBeInTheDocument();
+
+    await signIn(user);
+    expect(await screen.findByRole("button", { name: "Place order" })).toBeInTheDocument();
+    expect(badge()).toBe("1");
   });
 });
 

@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { Provider } from "react-redux";
 import { BrowserRouter } from "react-router-dom";
 import App from "./app/App.tsx";
+import { loadSession, persistSession, verifySession } from "./features/auth/sessionStorage.ts";
 import { loadCart, persistCart } from "./features/cart/cartStorage.ts";
 import { connectApiToStore } from "./store/connectApi.ts";
 import { makeStore } from "./store/store.ts";
@@ -21,10 +22,17 @@ async function enableMocking(): Promise<void> {
   await startMockApi();
 }
 
-// The saved cart (validated) is the starting state; every change is saved again.
+// The saved cart and session (both validated) are the starting state; every
+// change is saved again. The cart lives in localStorage, the session in
+// sessionStorage (docs/auth.md explains why).
 const savedCart = loadCart();
-const store = makeStore(savedCart ? { cart: savedCart } : undefined);
+const savedSession = loadSession();
+const store = makeStore({
+  ...(savedCart ? { cart: savedCart } : {}),
+  ...(savedSession ? { session: savedSession } : {}),
+});
 persistCart(store);
+persistSession(store);
 
 // The data layer reads the token from the session; a 401 ends the session.
 connectApiToStore(store);
@@ -50,4 +58,8 @@ void enableMocking()
   .catch((error: unknown) => {
     console.error("[mock] Failed to start the mock API.", error);
   })
-  .finally(renderApp);
+  .finally(() => {
+    renderApp();
+    // Now that the mock is up, check a restored token. A 401 ends the session.
+    void verifySession(store);
+  });

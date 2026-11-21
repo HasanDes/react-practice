@@ -156,6 +156,12 @@ export function createDb({
       return { token, user: publicUser(user) };
     },
 
+    /** Invalidate every token, as if they all expired (QA: "session expired"). */
+    expireSessions(): void {
+      state.sessions = {};
+      save();
+    },
+
     userForToken(token: string | null): User | null {
       const session = token ? state.sessions[token] : undefined;
       const user = session && users.find((candidate) => candidate.id === session.userId);

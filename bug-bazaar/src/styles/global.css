@@ -808,3 +808,85 @@ main:focus {
   color: var(--color-success);
   font-weight: 600;
 }
+
+/* ---- Auth (D3-3) ---- */
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.auth {
+  max-width: 26rem;
+}
+
+.auth__form,
+.account__card {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.account__card {
+  max-width: 32rem;
+  justify-items: start;
+}
+
+.auth__field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.auth__field label {
+  font-weight: 600;
+}
+
+.auth__field input {
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  border: 1px solid #7b8794; /* 3:1+ against white for the input boundary */
+  border-radius: var(--radius);
+}
+
+.auth__field input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+  border-width: 2px;
+}
+
+.auth__field-error,
+.auth__error {
+  margin: 0;
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.auth__error {
+  padding: 0.6rem 0.8rem;
+  background: #fdecec;
+  border-left: 4px solid var(--color-danger);
+  border-radius: var(--radius);
+}
+
+.auth__notice {
+  padding: 0.6rem 0.8rem;
+  background: #fff7e0;
+  border-left: 4px solid var(--color-warning);
+  border-radius: var(--radius);
+}
+
+.auth__hint {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}

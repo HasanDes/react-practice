@@ -1,5 +1,9 @@
 import { lazy, Suspense } from "react";
 import { Link, Route, Routes } from "react-router-dom";
+import AccountLink from "../features/auth/components/AccountLink.tsx";
+import RequireAuth from "../features/auth/components/RequireAuth.tsx";
+import AccountPage from "../features/auth/pages/AccountPage.tsx";
+import LoginPage from "../features/auth/pages/LoginPage.tsx";
 import CartLink from "../features/cart/components/CartLink.tsx";
 import CartPage from "../features/cart/pages/CartPage.tsx";
 import CheckoutPage from "../features/orders/pages/CheckoutPage.tsx";
@@ -25,6 +29,7 @@ export default function App() {
           </Link>
         </p>
         <nav aria-label="Main" className="site-nav">
+          <AccountLink />
           <CartLink />
         </nav>
       </header>
@@ -33,8 +38,24 @@ export default function App() {
           <Route path="/" element={<ProductsPage />} />
           <Route path="/products/:id" element={<ProductDetailRoute />} />
           <Route path="/cart" element={<CartPage />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route
+            path="/checkout"
+            element={
+              <RequireAuth>
+                <CheckoutPage />
+              </RequireAuth>
+            }
+          />
           <Route path="/orders/:id" element={<OrderConfirmationPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/account"
+            element={
+              <RequireAuth>
+                <AccountPage />
+              </RequireAuth>
+            }
+          />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>

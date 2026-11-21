@@ -11,7 +11,10 @@ export type OutOfStockItem = { productId: string; name: string; available: numbe
 export type CheckoutProblem =
   /** 409: some items no longer have enough stock. Names each one (D3-2). */
   | { kind: "out-of-stock"; items: OutOfStockItem[] }
-  /** 401: the session ended; the store was already cleared by the API client hook. */
+  /**
+   * 401. Normally the API client hook has already ended the session, and
+   * RequireAuth has sent the user to sign in (and back to checkout after).
+   */
   | { kind: "session-expired" }
   /** 400: the server rejected the cart contents. */
   | { kind: "invalid-cart" }

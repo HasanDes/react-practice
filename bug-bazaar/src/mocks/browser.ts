@@ -21,6 +21,7 @@ export type BazaarMockConsole = {
   race: (stepMs?: number) => ControlsSnapshot;
   setStock: (productId: string, stock: number) => Product | undefined;
   reset: () => string;
+  expireSessions: () => string;
   status: () => ControlsSnapshot;
   help: () => void;
 };
@@ -92,6 +93,11 @@ function createConsoleApi(db: MockDb, controls: MockControls): BazaarMockConsole
       controls.clear();
       return "Mock database reset. Reload the page.";
     },
+    /** Every token stops working: the next signed-in request gets a 401. */
+    expireSessions: () => {
+      db.expireSessions();
+      return "All sessions expired. The next signed-in request gets a 401.";
+    },
     status: () => controls.snapshot(),
     help: () => {
       console.table(
@@ -108,6 +114,7 @@ function createConsoleApi(db: MockDb, controls: MockControls): BazaarMockConsole
           "bazaarMock.latency(ms, jitter?)            slow responses (jitter reorders them)",
           "bazaarMock.race(stepMs?) / race(0)         out-of-order search responses (D2-6)",
           "bazaarMock.setStock(productId, n)          change stock",
+          "bazaarMock.expireSessions()                every token stops working (401)",
           "bazaarMock.reset()                         wipe orders/sessions/stock changes",
           "bazaarMock.status()                        show current controls",
         ].join("\n"),
