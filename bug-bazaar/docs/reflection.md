@@ -79,7 +79,7 @@ Each rating names the evidence, so it can be challenged.
 | D5-4 Architecture vocabulary  | 8   | Each term is tied to this store, with what it's confused with. Includes a counter-example from the code (two tabs' carts don't converge).               |
 | D5-5 Architecture review      | –   | Not rated yet: it needs the review partner's `ARCHITECTURE.md`.                                                                                         |
 | D5-6 Code review              | –   | Not rated yet: it needs the partner's pull request.                                                                                                     |
-| D5-7 AI workflow and AI notes | 8   | Mistakes logged as they happened (ten), three uses with what was kept and changed, a clear line on what not to hand to AI.                              |
+| D5-7 AI workflow and AI notes | 8   | Mistakes logged as they happened (eleven by D5-9), three uses with what was kept and changed, a clear line on what not to hand to AI.                   |
 | D5-8 Assessment               | –   | This page.                                                                                                                                              |
 | D5-9 Submission               | –   | Not rated yet: the pull request and walkthrough come next.                                                                                              |
 
@@ -94,7 +94,7 @@ That's where the two gaps come from.
 
 ### Gap 1: browser-level behavior is checked by hand, not by tests
 
-- **The evidence:** four of the ten logged AI mistakes (five bugs in all) involved runtime behavior that jsdom can't reproduce:
+- **The evidence:** four of the first ten logged AI mistakes (five bugs in all) involved runtime behavior that jsdom can't reproduce:
   - aborts and the Service Worker
   - the scroll-restore timing, twice
   - a global captured before the mock patched it
