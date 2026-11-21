@@ -460,3 +460,40 @@ All are fully typed (`useRequest<T>` infers `T` from the fetcher, so the pages g
 
 - **`useLocalStorage`:** the obvious "sync state with storage" example from the brief, but nothing needs it yet. The cart (D3-1/D3-2) will persist through Redux, where a store-level subscriber is the right place. A hook with no caller would be speculative code.
 - **`useFocusOnMount`** (focus the heading after navigation): used once in `ProductDetails`. I'll extract it if a second page needs it.
+
+---
+
+## D2-6: Race conditions
+
+### The problem
+
+Typing "duck" can send requests for `d`, `du`, `duc` and `duck`. Responses can come back in **any** order. If `du`'s answer lands after `duck`'s, the screen shows results for an old query under a box that says "duck". A debounce makes this rarer (fewer requests), but it can't prevent it: pausing for longer than the debounce still sends several requests.
+
+### Simulating it: deterministic "race mode"
+
+- **Used:** `bazaarMock.race(stepMs)` (QA panel: "Race mode") adds `stepMs × (6 − search length)` to product-list responses. **Shorter (older) searches answer slower**: with 400 ms steps, `d` takes 2 s and `duck` 0.8 s, so responses arrive in _reverse_ order.
+- **Considered:** random jitter only (already there since D1-2). It's realistic but random: a demo or test might not hit the bad ordering at all.
+- **Why:** the worst case, every time, so it can be demoed live and asserted in tests.
+
+### The fix: three layers
+
+1. **Debounce (D2-2):** typing fast sends one request for the final query. A test asserts exactly one request for "keyboard".
+2. **Cancel on key change (`useRequest`, D2-5):** a new query aborts the previous request, so it never resolves into state. A check on `controller.signal.aborted` also covers a response that resolves in the same tick as the abort.
+3. **Show staleness honestly (new):** while a typed search is waiting for its pause, the results dim (`.results--stale`, `aria-busy="true"`) and the live count says "Searching…". Old results are never presented as if they belonged to the new text. The count then names its query: **"1,228 products for “duck”"**.
+
+- **Considered:**
+  - **Sequence numbers:** ignore any response older than the latest request id. It works too, but leaves old requests running. Aborting frees the network and is visible in DevTools.
+  - **`ignore` flag only:** same downside.
+  - **Hiding results while typing:** jarring. Dimming keeps context.
+- **Small related fix:** a search that ends up where it started (type "x", then Backspace) no longer pushes a duplicate history entry or refetches. `updateFilters` skips no-op URL changes.
+
+### Proving it
+
+- **The race test** (`searchRace.test.tsx`): race mode on, typing "duck" with pauses longer than the debounce, so every prefix is sent. A `MutationObserver` records every result summary shown. For each one ("N products for “X”"), N must equal the **true total for X**, computed from the mock data. This catches the real bug (stale _data_ under a new label), not just stale labels. The shown queries must only move forward (d → du → duc → duck), end on "duck", and stay there after every slower response has arrived. Older requests are asserted aborted.
+- **Mutation check:** I removed the abort and stale guard from `useRequest`. The race test failed with "expected 1341 to be 1228": an older prefix's results appeared under "duck". Restored, it passed.
+- **Real browser** (Edge, StrictMode, Service Worker, race step 400 ms): typing "duck" with 400 ms pauses showed only "Searching…" and then "1,228 products for “duck”". This holds even though the Service Worker still answers the cancelled requests (it doesn't forward aborts, as found in D2-3), because the client's aborted `fetch` discards them.
+
+### What I'd explain in the walkthrough
+
+- **Why not just debounce?** A debounce reduces requests but doesn't order responses. Any pause longer than the debounce sends another request.
+- **Why abort rather than compare ids?** Both prevent stale writes. Aborting also stops the work and shows up in DevTools as "(canceled)". On a real backend with an HTTP/1.1 connection limit, it frees the connection for the request that matters.

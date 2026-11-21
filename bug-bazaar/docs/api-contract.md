@@ -213,6 +213,8 @@ Route names: `products:list`, `products:get`, `login`, `me`, `orders:create`, `o
 
 **Simulating a dropped connection:** besides HTTP statuses, every route accepts `"network"`, as in `bazaarMock.fail("products:get", "network")` or the header `x-mock-error: network`. The mock answers with no response at all (`HttpResponse.error()`), so `fetch` rejects as it would offline. The data layer reports it as `kind: "network"`.
 
+**Race mode (out-of-order search, D2-6):** `bazaarMock.race(400)` makes shorter search queries answer slower: `400 ms × (6 − length)`, so "d" takes 2 s and "duck" 0.8 s. Typing with pauses then produces responses in reverse order, the worst case for search. `bazaarMock.race(0)` turns it off. It's also a QA panel toggle. It only affects `GET /api/products`.
+
 **One-shot failures and React StrictMode:** in development, StrictMode mounts effects twice. The first, discarded request can use up a `{ once: true }` failure, because the Service Worker doesn't forward the abort to the mock. To show an error reliably in the browser, use a persistent failure, then `bazaarMock.clear()` and press **Try again**. The QA panel does exactly this. One-shot failures work as expected in tests and in production builds (no StrictMode double mount).
 
 **QA panel:** while the mock is on, a "QA: trigger states" panel in the bottom-right corner sets these up in one click: loading, server error, offline, empty, not found, stop errors, reset.
