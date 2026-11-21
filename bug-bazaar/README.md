@@ -6,7 +6,7 @@ A small React + TypeScript (strict) store that sells developer gear: rubber duck
 - **Dev → QA workflow:** [docs/workflow.md](docs/workflow.md)
 - **Decisions log:** [docs/decisions.md](docs/decisions.md) (updated every task)
 
-> **Current status: Day 3 complete (D3-1 to D3-5).** Browse, filter and add to cart; **edit the cart** (stock-capped), which **survives a reload**; **sign in** (demo: `dev@bugbazaar.test` / `rubberduck`) and come back to where you were; **check out** with idempotent retries and 409 handling; see the order confirmation with live status. Checkout and the account page are protected, and an expired session sends you to sign in without losing the cart. Every API error is handled one way: field errors, sign-in, a Not Found page, named out-of-stock items, or Try again, and never the server's raw text. Catalog pages are cached: revisits and list → details are instant, and stock is refetched for whatever you just bought.
+> **Current status: Day 4 in progress. Days 1–3 complete; D4-1 done.** Browse, filter and add to cart; **edit the cart** (stock-capped), which **survives a reload**; **sign in** (demo: `dev@bugbazaar.test` / `rubberduck`) and come back to where you were; **check out** with idempotent retries and 409 handling; see the order confirmation with live status. Checkout and the account page are protected, and an expired session sends you to sign in without losing the cart. Every API error is handled one way: field errors, sign-in, a Not Found page, named out-of-stock items, or Try again, and never the server's raw text. Catalog pages are cached: revisits and list → details are instant, and stock is refetched for whatever you just bought. Keyboard and screen-reader friendly: Lighthouse accessibility 100 on home, cart and login.
 
 ---
 
@@ -61,6 +61,7 @@ The project pins Node 26 in `.nvmrc`.
 | `npm run test:watch`   | Vitest in watch mode                                                    | ✅     |
 | `npm run check`        | lint + format:check + typecheck + test + build: run before every push   | ✅     |
 | `npm run typecheck`    | `tsc -b`: strict type check of app, tests and config (no output files)  | ✅     |
+| `npm run a11y`         | Build, then Lighthouse accessibility on home, cart, login (fails < 90)  | ✅     |
 
 ## Environment variables
 

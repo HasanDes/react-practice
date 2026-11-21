@@ -855,3 +855,103 @@ The rule: **stale data is fine where being wrong is cheap and something downstre
   - related products were kept (the related list never contains the page's own product)
   - no console errors
 - **A mistake in my own check:** the first browser run reported an extra related-products request on revisit. The cause was my script, not the app. The related section's loading skeleton also has the class `product-card`, so the script's "wait until related cards appear" passed immediately. It then left the page with the request still in flight, the abort-on-leave discarded it, and the revisit had to fetch. With the script waiting for real cards, the revisit made 0 requests. Same lesson as before: check what a wait condition actually matches.
+
+---
+
+## D4-1: Accessibility
+
+### How it was measured
+
+Three layers, because each catches what the others miss:
+
+1. **Lighthouse** (`npm run a11y`, `scripts/a11y-audit.mjs`)
+   - What it checks: the spec's metric, against the production build in headless Chrome or Edge.
+   - Pages: home, cart (empty, and **with items** preloaded into storage, so the real cart page is audited), and login.
+   - It prints every failing audit and **exits non-zero below 90**, so CI can use it (D4-6).
+2. **axe-core in tests** (`src/a11y/a11y.test.tsx`)
+   - What it checks: the same rule engine Lighthouse uses, run on **every page and state**: home, details, cart (empty and full), checkout, login with and without errors, account, not found, and an error state.
+   - Runs on every `npm test`, so a regression fails CI.
+   - Color contrast is off here because jsdom can't compute colors. Lighthouse checks it.
+3. **A keyboard and accessibility-tree audit in real Edge**
+   - What it checks: actual key presses through the DevTools protocol, then:
+     - where focus lands after each action
+     - target sizes at phone width
+     - the **accessibility tree**: the names, descriptions, invalid states and live regions that screen readers read
+   - Automated rules can't see "focus fell to `<body>` after Remove". This can.
+
+### Before → after
+
+|                               | Before               | After   |
+| ----------------------------- | -------------------- | ------- |
+| Lighthouse: home              | 100                  | **100** |
+| Lighthouse: cart (empty)      | 100                  | **100** |
+| Lighthouse: cart (with items) | **96** (target size) | **100** |
+| Lighthouse: login             | 100                  | **100** |
+
+The scores were already above 90. **The audit found what mattered:**
+
+| Found                                                                                    | Why it matters                                                                               | Fix                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Back to the list: **focus fell to `<body>`**. The cart link: focus stayed in the header. | A screen reader says nothing about the new page, and keyboard users start over from the top. | `useFocusOnRouteChange`: when the **path** changes, focus the new page's `<h1>`. Not on query changes, so typing in search keeps focus. Not on first load. |
+| No `<h1>` on any page                                                                    | Screen-reader users jump to the h1 to find the main content.                                 | Every page heading is an `<h1>`. Card titles are `<h2>`, or `<h3>` under Related's `<h2>`. Not Found is an `<h1>`.                                         |
+| "+" pressed up to the stock limit: **focus fell to `<body>`**                            | A `disabled` button can't hold focus.                                                        | `aria-disabled` (still focusable, still announced as dimmed); the click handler ignores it at the limit.                                                   |
+| Remove: **focus fell to `<body>`**                                                       | The button disappears with its line.                                                         | Focus moves to the cart heading.                                                                                                                           |
+| Cart: **nothing announced**                                                              | Sighted users see the number and total change. Screen-reader users heard nothing.            | A polite live region: "Decaf Pods #1: quantity 3. That's all 3 available. Cart total $…" and "… removed from your cart."                                   |
+| Cart at phone width: **−/+ buttons 14 px wide, product name 0 px**                       | Lighthouse's target-size failure (WCAG 2.5.8), and the layout didn't reflow (1.4.10).        | A mobile-first grid that stacks on narrow screens, with 44 px buttons that never shrink.                                                                   |
+| Cart link: name "Cart, 0 items", visible text "Cart 0"                                   | WCAG 2.5.3, Label in Name: voice-control users say what they see.                            | The name comes from the link's content: the visible parts are hidden from assistive tech, and one visually hidden span says "Cart, 3 items".               |
+
+### Form errors are announced
+
+Already built in D3-3, and now tested as its own "Done when":
+
+- **Field errors:**
+  - each invalid field gets `aria-invalid` and `aria-describedby` pointing to its error text
+  - `flushSync` renders those before focus moves
+  - focus goes to the first invalid field, so a screen reader reads "Email, invalid entry, Enter your email address."
+- **Form-level errors** (wrong password, offline, …): a `role="alert"` region that already exists in the page before its text changes, which makes announcements more reliable. Focus moves to it.
+- **Checkout problems** (409, 500, …): `role="alert"`.
+- **Checked in the real accessibility tree:**
+  - after an empty submit, the Email textbox is focused, invalid, and described by "Enter your email address."
+  - after a wrong password, the alert is focused and assertive, with the message as its text
+
+### Considered
+
+- **Announcing route changes in a live region** ("Navigated to Cart") instead of moving focus. Focusing the `<h1>` does both jobs (the page name is read, and keyboard users start at the content) with one mechanism.
+- **Keeping `disabled` and moving focus elsewhere at the limit.** It's surprising to have focus jump while pressing a button. `aria-disabled` is the established pattern for controls that should stay reachable.
+- **Focus after Remove:** the next line's Remove button (good for removing many in a row) or the heading (always exists, even when the cart becomes empty). I chose the heading, plus an announcement.
+- **`jest-axe` or `vitest-axe` wrappers:** a few lines around `axe-core` do the same job without another dependency.
+
+### Not done: a real screen reader
+
+The probe reads the **accessibility tree**, the data NVDA, Narrator and VoiceOver consume. It doesn't run a screen reader. Speech output (exact phrasing, double announcements when an alert is also focused) still needs a manual pass. That's workflow D4 case 2 and Flow E, with NVDA or Narrator, for QA.
+
+### Proving it
+
+- **Tests** (17 in `a11y.test.tsx`):
+  - axe on 10 page states
+  - focus moves to the h1 when opening a product, going back and opening the cart
+  - typing in search keeps focus
+  - "+" announces the quantity, limit and total, and keeps focus
+  - Remove announces and focuses the heading
+  - login fields are invalid, described and focused
+  - the login alert is focused
+  - the checkout failure is an alert
+
+  The checkout stepper test was updated: `aria-disabled`, focus kept, and an extra click ignored.
+
+- **Mutation checks**, each caught:
+  - no route focus
+  - route focus also firing on query changes (stealing focus from search)
+  - stepper back to `disabled`
+  - no live region
+  - Remove not moving focus
+  - the field error unlinked from its input
+  - an image without `alt`
+  - an unlabeled search box
+- **Real Edge, after the fixes** (real key presses):
+  - focus lands on "H1 Decaf Pods #1", then "H1 Products", then "H1 Your cart"
+  - stepper buttons are 44×44 at phone width
+  - focus stays on "+" at the limit
+  - the live region holds the announcement
+  - Remove focuses "H1 Your cart"
+  - the login errors are as described above

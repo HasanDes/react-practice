@@ -165,19 +165,19 @@ Each script lists the minimum cases QA must run. ★ marks the case that proves 
 
 ### D4: Harden
 
-| #    | Case                                           | Expected                                                               |
-| ---- | ---------------------------------------------- | ---------------------------------------------------------------------- |
-| 1 ★  | Lighthouse on home, cart, login                | Accessibility ≥ 90 each (save screenshots)                             |
-| 2 ★  | Submit an invalid form with a screen reader on | Errors announced                                                       |
-| 3    | Full flow keyboard-only                        | Possible end to end, focus never lost                                  |
-| 4 ★  | Profile the list before and after each fix     | Numbers recorded in `performance.md`                                   |
-| 5 ★  | Scroll all 5,000 items with 4× CPU throttle    | Smooth, no long frames > 50 ms during scroll                           |
-| 6 ★  | Stock change pushed by the mock feed           | UI updates without a refresh                                           |
-| 7 ★  | Kill the feed / go offline → restore           | Reconnects (with backoff) and resyncs                                  |
-| 8 ★  | Leave the page                                 | Socket closed / polling stopped (DevTools shows nothing)               |
-| 9 ★  | `npm run test`                                 | ≥ 15 meaningful tests pass, including a successful order **and** a 409 |
-| 10 ★ | Push a PR with a deliberately failing test     | CI red, merge blocked                                                  |
-| 11 ★ | Trigger a dev-only "throw" button              | Fallback screen shown, error logged, rest of app alive                 |
+| #    | Case                                             | Expected                                                               |
+| ---- | ------------------------------------------------ | ---------------------------------------------------------------------- |
+| 1 ★  | `npm run a11y` (Lighthouse on home, cart, login) | Accessibility ≥ 90 each; the script fails below 90                     |
+| 2 ★  | Submit an invalid form with a screen reader on   | Errors announced                                                       |
+| 3    | Full flow keyboard-only                          | Possible end to end, focus never lost                                  |
+| 4 ★  | Profile the list before and after each fix       | Numbers recorded in `performance.md`                                   |
+| 5 ★  | Scroll all 5,000 items with 4× CPU throttle      | Smooth, no long frames > 50 ms during scroll                           |
+| 6 ★  | Stock change pushed by the mock feed             | UI updates without a refresh                                           |
+| 7 ★  | Kill the feed / go offline → restore             | Reconnects (with backoff) and resyncs                                  |
+| 8 ★  | Leave the page                                   | Socket closed / polling stopped (DevTools shows nothing)               |
+| 9 ★  | `npm run test`                                   | ≥ 15 meaningful tests pass, including a successful order **and** a 409 |
+| 10 ★ | Push a PR with a deliberately failing test       | CI red, merge blocked                                                  |
+| 11 ★ | Trigger a dev-only "throw" button                | Fallback screen shown, error logged, rest of app alive                 |
 
 ### D5: Explain
 
