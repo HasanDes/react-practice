@@ -1,5 +1,7 @@
-// Week 1 bug-board mock (fails ~1 in 4 on purpose). Removed when the board is
-// replaced by the product grid in Day 2.
+// LEGACY (Week 1 board): a fake in-memory source that fails ~1 in 4 times on
+// purpose. It isn't part of the store contract and has no HTTP endpoint, but
+// it lives in the data layer so no component reaches for data on its own.
+// Deleted when the board is replaced by the product grid (D2-1).
 
 import type { Bug } from "../features/bugs/types.ts";
 
@@ -9,7 +11,7 @@ const BUGS: readonly Bug[] = [
   { id: 3, title: "Search ignores capital letters", severity: "Medium" },
 ];
 
-export function fetchBugs(): Promise<Bug[]> {
+export function getBugs(): Promise<Bug[]> {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
       if (Math.random() < 0.25) {

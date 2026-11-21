@@ -52,6 +52,50 @@ export default tseslint.config(
     languageOptions: { globals: globals.browser },
   },
 
+  // D1-4: one data layer. Only src/api/ talks to the network, and only the
+  // bootstrap (main.tsx) may load the mock backend.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/api/**", "src/mocks/**", "src/main.tsx"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        ...["fetch", "XMLHttpRequest", "WebSocket", "EventSource"].map((name) => ({
+          name,
+          message:
+            "Network access belongs in src/api/. Import a function from src/api/index.ts instead.",
+        })),
+      ],
+      "no-restricted-properties": [
+        "error",
+        ...["window", "globalThis", "self"].map((object) => ({
+          object,
+          property: "fetch",
+          message: "Network access belongs in src/api/.",
+        })),
+      ],
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ["axios", "ky", "msw"].map((name) => ({
+            name,
+            message: "HTTP clients and MSW are only used inside src/api/ and src/mocks/.",
+          })),
+          patterns: [
+            {
+              group: ["**/mocks/**"],
+              message: "UI code must not import the mock backend. Use src/api/.",
+            },
+            {
+              group: ["**/api/*", "!**/api/index.ts"],
+              message: "Import from src/api/index.ts (the data layer's public entry point).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   {
     rules: {
       eqeqeq: ["error", "always"],

@@ -4,7 +4,7 @@ import LoadGate from "../components/LoadGate.tsx";
 import BoardPage from "../features/bugs/pages/BoardPage.tsx";
 import BugDetailPage from "../features/bugs/pages/BugDetailPage.tsx";
 import type { Bug, NewBug } from "../features/bugs/types.ts";
-import { fetchBugs } from "../mocks/mockApi.ts";
+import { getBugs } from "../api/index.ts";
 import { requestState, type RequestState } from "../types/request.ts";
 import NotFoundPage from "./NotFoundPage.tsx";
 
@@ -24,7 +24,7 @@ export default function App() {
     // e.g. the extra mount StrictMode does in development.
     let ignore = false;
 
-    fetchBugs()
+    getBugs()
       .then((data) => {
         if (!ignore) setBugsRequest(requestState.success(data));
       })
