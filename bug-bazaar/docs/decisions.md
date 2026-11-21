@@ -265,3 +265,55 @@ The legacy `fetchBugs()` fake moved from `src/mocks/` into `src/api/bugs.ts` (`g
 ### Week 1 board removed
 
 The bugs feature, `LoadGate`'s bug-specific copy and `src/api/bugs.ts` are gone. `/` is now the store. `LoadGate` takes `loadingText` / `errorText`, so pages show friendly copy and never a raw error message (a first step toward D2-3 and D3-4).
+
+---
+
+## D2-2: Filters
+
+### The URL is the single source of truth
+
+- **Used:** search, category, in-stock, sort and page live **only** in the URL query (`useSearchParams`). The page parses them on every render (`parseFilters`), and every change writes a new URL (`toSearchParams`). There's no filter state in React, Redux or `localStorage`.
+- **Considered:**
+  - **`useState` + syncing to the URL in an effect:** two copies of the truth, and the classic bug is the sync loop or a one-render mismatch after Back.
+  - **Redux / `localStorage`:** survives a refresh, but a copied link wouldn't reproduce the view, and Back wouldn't undo filters.
+- **Why:** the three "Done when" criteria are all properties of the URL. A refresh reloads the same URL. A copied link _is_ the view. Back and Forward walk through URL history. With the URL as the only state, all three come for free and can't drift apart.
+- **Canonical URLs:** defaults are omitted (the unfiltered list is just `/`), and params are always written in the same order. Equivalent views get identical URLs, which keeps links short and gives D3-5 stable cache keys.
+- **Untrusted input:** anyone can edit a URL, so `parseFilters` validates every value with type guards. Unknown values (`?category=bogus&page=-3`) fall back to defaults instead of breaking the page.
+
+### History: push for choices, debounce for typing
+
+- **Used:**
+  - Selects, the checkbox, paging and Clear each **push** one history entry.
+  - Search keeps a local draft and commits to the URL 300 ms after typing stops (`useDebouncedCallback`), as **one** pushed entry. Enter commits immediately.
+- **Considered:** pushing every keystroke (Back would undo one letter at a time); `replace` for search (Back would skip searches entirely); a Search button only (no live results, and D2-6 expects search-as-you-type).
+- **Why:** each Back press should undo one _intention_. A test asserts that typing "beans" creates exactly one entry, and that one Back removes the whole search.
+- **Changing a filter resets to page 1.** Page 7 of "all products" means nothing for "coffee". Paging itself keeps the filters.
+
+### Keeping the search box honest after Back
+
+- **Problem:** the input has a local draft, so when the URL changes from elsewhere (Back, Clear, a pasted link), the draft would show stale text. Worse, a still-pending debounced commit could fire _after_ Back and re-push the old search.
+- **Solution:**
+  - The draft is re-synced from the URL using React's "adjust state during render" pattern (compare with the last synced value, then set state). There's no effect, so no frame with the stale value.
+  - Any external change to the URL's search **cancels** the pending commit.
+  - The comparison uses the trimmed draft, so a commit doesn't wipe a trailing space the user is still typing.
+
+### `useDebouncedCallback` (first custom hook; D2-5 builds on it)
+
+- **Used:** a framework-free `createDebouncer` (the timer lives in a closure) wrapped by a small hook. The hook installs the latest callback in an effect, so it never calls stale props, and it cancels on unmount, so nothing runs after the page closes (D2-4). It exposes `call`, `cancel` and `flush`.
+- **Lint pushback:** my first version kept the timer in `useRef` and built the functions inside `useMemo`. The React Compiler lint (`react-hooks/refs`) flagged that refs might be read during render. Moving the timer into a plain closure fixed it properly, without disabling the rule. It also made the core debouncer testable without React.
+
+### Loading state follows the URL
+
+- **Used:** the page derives one canonical `queryKey` string from the filters. When it changes (any source: a control, Back, a link), the state is reset to loading **during render**, and the fetch effect, keyed on `queryKey`, aborts the previous request.
+- **Why:** previously, the paging handler set "loading" itself, but Back changes the URL without calling any handler. Deriving loading from the key covers every way the URL can change. The abort keeps a slow old response from overwriting newer results. D2-6 stress-tests that with out-of-order responses.
+
+### UX details
+
+- **Result count:** "1,069 products match your filters". It lives in a `role="status"` live region, so screen reader users hear the new count after each change, without focus moving.
+- **Clear filters:** shown only when a filter is active, plus a second Clear button in the empty state ("No products match your filters."). An out-of-range page (a stale link to page 40) gets "That page doesn't exist" with a link to page 1, instead of a misleading "no products".
+- **Back to products** on the details page returns to the exact filtered list. The list's query string travels in router `state` (narrowed from `unknown` with a guard). The details URL stays clean and shareable, and visiting it directly still gives a sensible "Back" to `/`.
+- **Native controls:** `<form role="search">` with visible `<label>`s, a real `<select>`, a checkbox and `type="search"`. They're keyboard and screen reader accessible without ARIA. The keyboard test now asserts the full Tab order through every filter.
+
+### Contract extension used
+
+The in-stock filter uses the `inStock=true` extension added in D1-2. Filtering client-side would have broken `total` and pagination.

@@ -6,7 +6,7 @@ A small React + TypeScript (strict) store that sells developer gear: rubber duck
 - **Dev → QA workflow:** [docs/workflow.md](docs/workflow.md)
 - **Decisions log:** [docs/decisions.md](docs/decisions.md) (updated every task)
 
-> **Current status: Day 2 in progress. D2-1 done.** The store shows a keyboard-accessible **product grid** (24 per page, prices formatted from cents) and a **details page**, backed by the mock API through the data layer. Filters and URL state (D2-2) come next.
+> **Current status: Day 2 in progress. D2-1 and D2-2 done.** A keyboard-accessible product grid with a details page, plus **search, category, in-stock and sort filters stored in the URL**, so they survive a refresh, links reproduce the view, and Back works. UI states (D2-3) come next.
 
 ---
 
@@ -109,9 +109,11 @@ bug-bazaar/
 │   │   └── LoadGate.tsx          # Renders loading/error/success from a RequestState
 │   ├── features/                 # One folder per feature: its pages + components
 │   │   └── products/
-│   │       ├── components/       # Presentational: ProductGrid, ProductCard, StockStatus, Pagination
+│   │       ├── components/       # Presentational: ProductFilters, ProductGrid, ProductCard, StockStatus, Pagination
 │   │       ├── pages/            # Containers: ProductsPage (/), ProductDetailPage (/products/:id)
-│   │       └── products.test.tsx # Integration tests (keyboard, prices, states)
+│   │       ├── filters.ts        # URL ⇄ filters (parse/serialize, the source of truth)
+│   │       ├── navigation.ts     # "Back to products" returns to the filtered list
+│   │       └── *.test.ts(x)      # Unit + integration tests (keyboard, prices, URL/history)
 │   ├── mocks/                    # Mock backend (MSW). See docs/api-contract.md
 │   │   ├── data/seed.ts          # Deterministic 5,000-product generator
 │   │   ├── contract.ts           # Contract constants + allowed errors per route
@@ -131,6 +133,8 @@ bug-bazaar/
 │   ├── types/
 │   │   ├── api.ts                # Shared contract types (single source of truth)
 │   │   └── request.ts            # RequestState discriminated union
+│   ├── hooks/
+│   │   └── useDebouncedCallback.ts # Debounce with cancel/flush, cleans up on unmount
 │   ├── main.tsx                  # Entry point: providers + router
 ├── public/
 │   ├── images/products/          # Category images used by product imageUrl
@@ -149,19 +153,19 @@ bug-bazaar/
 
 Folders added by later tasks _(planned)_:
 
-| Folder                                | Purpose                                                    | Task |
-| ------------------------------------- | ---------------------------------------------------------- | ---- |
-| `src/hooks/`                          | Reusable typed hooks (`useDebounce`, `useLocalStorage`, …) | D2-5 |
-| `src/store/`                          | Redux Toolkit: cart and session slices, selectors          | D3-1 |
-| `src/features/cart`, `auth`, `orders` | Store features                                             | D3   |
+| Folder                                | Purpose                                           | Task |
+| ------------------------------------- | ------------------------------------------------- | ---- |
+| `src/store/`                          | Redux Toolkit: cart and session slices, selectors | D3-1 |
+| `src/features/cart`, `auth`, `orders` | Store features                                    | D3   |
 
 **Rules of thumb**
 
 1. A file used by one feature lives in that feature's folder (e.g. `StockStatus` in `features/products/`). Move it to `components/` only when a second feature needs it.
 2. Components never talk to the network. They call functions from `src/api/index.ts`. ESLint fails on `fetch`, `XMLHttpRequest`, `WebSocket`, `axios` or mock imports anywhere else.
 3. File names: `PascalCase.tsx` for components, `camelCase.ts` for everything else. Import with the extension (`./App.tsx`).
-4. Money is integer cents everywhere. Only `formatPrice()` turns it into text.
-5. Data from outside the app (JSON, URL params, storage, form values) is `unknown` until a type guard narrows it. No `as` casts on untrusted data.
+4. Shareable view state (filters, sort, page) lives in the URL, not in React state.
+5. Money is integer cents everywhere. Only `formatPrice()` turns it into text.
+6. Data from outside the app (JSON, URL params, storage, form values) is `unknown` until a type guard narrows it. No `as` casts on untrusted data.
 
 ## API contract
 
@@ -198,14 +202,14 @@ bazaarMock.reset(); // wipe orders, sessions, stock changes
 
 ## Week plan and progress
 
-| Day | Theme      | Tasks                                                                                                                  | Pts | Status |
-| --- | ---------- | ---------------------------------------------------------------------------------------------------------------------- | --- | ------ |
-| 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                                 | —   | ✅     |
-| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer ✅                                  | 15  | ✅     |
-| 2   | Browse     | D2-1 Product list ✅ · D2-2 Filters · D2-3 UI states · D2-4 Effects cleanup · D2-5 Custom hooks · D2-6 Race conditions | 21  | 🟡     |
-| 3   | Buy        | D3-1 Redux Toolkit · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching                                        | 21  | ⬜     |
-| 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring   | 22  | ⬜     |
-| 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission                          | 21  | ⬜     |
+| Day | Theme      | Tasks                                                                                                                     | Pts | Status |
+| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------- | --- | ------ |
+| 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                                    | —   | ✅     |
+| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer ✅                                     | 15  | ✅     |
+| 2   | Browse     | D2-1 Product list ✅ · D2-2 Filters ✅ · D2-3 UI states · D2-4 Effects cleanup · D2-5 Custom hooks · D2-6 Race conditions | 21  | 🟡     |
+| 3   | Buy        | D3-1 Redux Toolkit · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching                                           | 21  | ⬜     |
+| 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring      | 22  | ⬜     |
+| 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission                             | 21  | ⬜     |
 
 Days 1 to 3 produce the working store and come first if time runs short.
 
