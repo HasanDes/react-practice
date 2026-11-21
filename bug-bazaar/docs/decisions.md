@@ -1157,3 +1157,49 @@ Full write-up: [testing.md](testing.md).
 - **Used:** `@vitest/coverage-v8` (`npm run test:coverage`), app code only. 96.8% → **97.7%** lines, 91.4% → **91.9%** branches.
 - **No coverage threshold in CI:** the vacuous race tests executed every line they "covered". Coverage finds what's untested; mutation testing shows what's _checked_. A threshold would reward executing code, not checking it. A floor may still be worth adding later as a tripwire against big untested additions.
 - **Stability before D4-6:** 5 consecutive full runs green (about 10.7 s each), and 2 runs with 2 workers (about 27.5 s, like a small CI machine).
+
+---
+
+## D4-6: Git / CI / CD
+
+Full write-up: [ci.md](ci.md).
+
+### GitHub Actions, at the repository root
+
+- **Used:** `.github/workflows/ci.yml` on pull requests (and pushes) to `develop`/`master`, with two jobs:
+  - **Lint, types, tests, build:** one step per gate, the same npm scripts as local development, and the coverage report uploaded.
+  - **Accessibility:** `npm run a11y`, the Lighthouse gate from D4-1.
+- **Why:** the code is already on GitHub, so this needs no extra service.
+- **Considered:** a single `npm run check` step (one red step that doesn't say which gate failed); a matrix of Node versions (the app targets one runtime, pinned in `.nvmrc`); running the a11y gate only on `develop` (it's cheap enough to run on every PR, and accessibility regressions are easiest to fix before merging).
+- **Hardening:**
+  - a read-only token
+  - `npm ci` against the lockfile
+  - superseded runs cancelled
+  - timeouts on every job
+  - workflow files kept LF by `.gitattributes`
+
+### "A failing test blocks the merge"
+
+- **CI alone doesn't block anything:** a red check is a signal. **Branch protection** (a ruleset on `develop` requiring both jobs, with no admin bypass) makes it a gate. That setting lives in the repository, not the code, so `ci.md` gives the exact steps.
+- **Proof:** the branch `ci-demo/failing-test` adds one deliberately wrong expectation. Its PR into `develop` must show the _Tests_ step red and the merge button disabled. It's closed, not merged, afterwards.
+- **Couldn't be automated from here:** no GitHub CLI or API token on this machine, so the repository owner sets the ruleset and opens the demo PR.
+
+### Deploy (bonus): `develop` → GitHub Pages
+
+- **Used:** `deploy.yml` on pushes to `develop` (this repository's main line: the default branch and the merge target). It runs `npm run check`, builds for `/react-practice/`, copies `404.html` for deep links, and publishes with `actions/deploy-pages`.
+- **Why Pages:** a static site needs nothing else. The app has no backend, and the mock API runs in the browser.
+- **Considered:** Netlify or Vercel (SPA rewrites built in, but another account and service to grant access to).
+- **To make that work, the app can now live in a subfolder:**
+  - Vite's `base` comes from `VITE_BASE_PATH`
+  - the router's `basename` follows `BASE_URL`
+  - the mock's image URLs follow it
+  - the Service Worker already did
+
+  All of these are `/` locally, so development is unchanged.
+
+- **Verified locally:** a clean worktree passed every CI step. The `/react-practice/` build worked in a real browser: images, routes, deep-link reload, mock API, live stock.
+
+### Environment lessons
+
+- **Stale preview servers:** a preview server left over from an earlier run held the port, so a check silently ran against the wrong build ("Page not found", a Service Worker at the root). Fixed by stopping leftovers and using a fresh port. Browser checks should use unique ports, and confirm the served build before trusting results.
+- **Git Bash path rewriting:** it turned `/react-practice/` into a Windows path. Locally that needs `MSYS_NO_PATHCONV=1`; CI on Linux is unaffected (noted in ci.md).
