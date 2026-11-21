@@ -226,3 +226,13 @@ Recorded as each one was found, newest last.
 - **How it was caught:** a test written to mimic a real bug, a component that throws a new `TypeError` on every render, instead of re-throwing one shared error. It failed with three reports where one was expected.
 - **What changed:** the window handler waits one task, then also drops an error with the same name and message as a `render` report from the last second. Two tests cover it: drop the retries, and keep a different error. A real browser confirmed one report in both builds. In development React raised the error to `window` four times, and production React not at all.
 - **Lesson:** test doubles should behave like the real failure. A test that throws one shared error object would have passed, and the bug would only have shown up as a noisy log in development.
+
+---
+
+### AI mistake: a 409 message that assumed stock only goes down (D3-2 → caught in D5-9)
+
+- **What happened:** after a 409, checkout refetches the stock of each item the server named and tells the user what changed. The AI's message had two cases: "sold out" (0) and "only has N left, so we lowered the quantity" (anything else). That assumes stock can only go down between the 409 and the refetch. It can also come back, through a restock or another shopper's failed order releasing its reservation. The page then said _"only has 10 left, so we lowered the quantity"_ while the cart still held 2.
+- **Why the tests didn't catch it:** the 409 test only ever _lowered_ stock between adding to the cart and checking out, the scenario the code was written for.
+- **How it was caught:** rehearsing the D5-9 walkthrough in headless Edge, with a forced 409 from the QA controls. The message on screen contradicted the cart badge.
+- **What changed:** each item now carries the quantity the cart asked for, so the page tells three cases apart: sold out, lowered, and _"available again, your quantity is unchanged"_. The title says "Stock changed while you were checking out" when nothing ran out. A test fails without the fix.
+- **Lesson:** a message that describes a change ("we lowered…") should be derived from the change itself, before vs. after, not from one number. And rehearsing a demo is testing: it puts the app into states nobody wrote a test for.

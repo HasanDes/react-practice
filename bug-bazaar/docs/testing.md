@@ -2,7 +2,7 @@
 
 This page covers how the Bug Bazaar is tested: what the tests check, how they're written so they test behavior rather than implementation, how we know they can fail, and what isn't covered. It also maps the D4-5 requirement onto the actual tests.
 
-**291 tests in 28 files, all passing** at the D4-5 audit (307 in 31 files after D4-7 added the monitoring tests; the figures below are from D4-5). They're stable across repeated runs (see "Stability"), and cover 97.7% of lines and 91.9% of branches in app code.
+**291 tests in 28 files, all passing** at the D4-5 audit (308 in 31 files after D4-7 added the monitoring tests and D5-9 one checkout test; the figures below are from D4-5). They're stable across repeated runs (see "Stability"), and cover 97.7% of lines and 91.9% of branches in app code.
 
 ## Commands
 

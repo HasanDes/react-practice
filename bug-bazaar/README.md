@@ -6,7 +6,36 @@ A small React + TypeScript (strict) store that sells developer gear: rubber duck
 - **Dev → QA workflow:** [docs/workflow.md](docs/workflow.md)
 - **Decisions log:** [docs/decisions.md](docs/decisions.md) (updated every task)
 
-> **Current status: Days 1–4 complete; Day 5 in progress (D5-1 to D5-4, D5-7 and D5-8 done: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [orders.md](docs/orders.md), [glossary.md](docs/glossary.md), [ai-notes.md](docs/ai-notes.md), [reflection.md](docs/reflection.md)).** Browse, filter and add to cart; **edit the cart** (stock-capped), which **survives a reload**; **sign in** (demo: `dev@bugbazaar.test` / `rubberduck`) and come back to where you were; **check out** with idempotent retries and 409 handling; see the order confirmation with live status. Checkout and the account page are protected, and an expired session sends you to sign in without losing the cart. Every API error is handled one way: field errors, sign-in, a Not Found page, named out-of-stock items, or Try again, and never the server's raw text. Catalog pages are cached: revisits and list → details are instant, and stock is refetched for whatever you just bought. Keyboard and screen-reader friendly: Lighthouse accessibility 100 on home, cart and login. Product cards appear 20% sooner on a cold visit, and an **All** view scrolls through all 5,000 products smoothly with only about 40 cards in the DOM ([docs/performance.md](docs/performance.md)). **Stock updates live** over a WebSocket, recovers by itself after a disconnect, and closes when no product is on screen. **307 tests** (behavior-focused, mutation-checked, 97.7% line coverage; see [docs/testing.md](docs/testing.md)). Every pull request is checked by GitHub Actions (lint, types, tests, build, accessibility), and `develop` deploys to GitHub Pages ([docs/ci.md](docs/ci.md)). A crash shows a fallback screen instead of a blank page, and every unexpected error is logged ([docs/monitoring.md](docs/monitoring.md)).
+> **Status: every task is done except the two partner reviews (D5-5, D5-6).** The submission checklist and the walkthrough script are in [docs/submission.md](docs/submission.md).
+
+### What it does
+
+- **Browse:**
+  - 5,000 products, filtered by search, category and stock, sorted and paginated.
+  - Filters live in the URL, so refresh, share and Back all keep the view.
+  - An **All** view scrolls through every product smoothly, with only about 40 cards in the DOM ([performance.md](docs/performance.md)).
+- **Buy:**
+  - **The cart** is capped at stock and survives a reload.
+  - **Sign in** with `dev@bugbazaar.test` / `rubberduck` and come back to where you were.
+  - **Checkout** retries safely (an idempotency key, so never a duplicate order) and names any out-of-stock item. The confirmation page checks the order's status every few seconds.
+  - Checkout and the account page are protected. An expired session sends you to sign in without losing the cart.
+- **When things go wrong:**
+  - **API errors:** every error is handled one way, as field errors, sign-in, Not Found, named out-of-stock items, or Try again. The server's raw text is never shown.
+  - **Crashes:** a crash shows a fallback screen instead of a blank page, and every unexpected error is logged ([monitoring.md](docs/monitoring.md)).
+- **Fast:**
+  - Catalog pages are cached, so revisits and list → details are instant, and stock is refetched for whatever you just bought.
+  - Product cards appear 20% sooner on a cold visit.
+  - **Stock updates live** over a WebSocket, recovers by itself after a disconnect, and closes when no product is on screen.
+- **Accessible:** usable with a keyboard and a screen reader. Lighthouse accessibility is 100 on the home, cart and login pages.
+- **Checked:**
+  - **308 tests:** behavior-focused and mutation-checked, with 97.7% line coverage ([testing.md](docs/testing.md)).
+  - **On every pull request,** GitHub Actions runs lint, types, tests, the build and accessibility. `develop` deploys to GitHub Pages ([ci.md](docs/ci.md)).
+- **Explained:**
+  - [ARCHITECTURE.md](docs/ARCHITECTURE.md): structure, data flow, where state lives, and design patterns.
+  - [orders.md](docs/orders.md): the queue-based order backend design.
+  - [glossary.md](docs/glossary.md): architecture terms.
+  - [ai-notes.md](docs/ai-notes.md): how AI was used.
+  - [reflection.md](docs/reflection.md): a self-assessment.
 
 ---
 
@@ -106,13 +135,18 @@ bug-bazaar/
 │   │   ├── products.ts, auth.ts, orders.ts  # Typed endpoint functions
 │   │   └── client.test.ts        # Data-layer tests
 │   ├── app/                      # App shell: routes, layout, app-wide pages
-│   │   ├── App.tsx
-│   │   └── NotFoundPage.tsx
+│   │   ├── App.tsx               # Header, routes, the page-level error boundary
+│   │   ├── NotFoundPage.tsx
+│   │   └── PageCrashed.tsx, AppCrashed.tsx  # D4-7: fallback screens (page / whole app)
 │   ├── components/               # Shared, feature-agnostic UI
 │   │   ├── BackToTop.tsx         # Appears after scrolling; listener cleaned up on unmount
+│   │   ├── ErrorBoundary.tsx     # D4-7: catches render errors, logs them, shows a fallback
 │   │   ├── LoadGate.tsx          # RequestState → loading / error / empty / success
-│   │   └── states.tsx            # LoadingState (skeletons), EmptyState, ErrorState
-│   ├── dev/QaPanel.tsx           # QA panel: trigger any UI state (mock only, lazy chunk)
+│   │   ├── icons.tsx             # Inline SVG icons (D4-2: no emoji font fallback)
+│   │   └── states.tsx            # LoadingState (skeletons), EmptyState, ErrorState, NotFoundState
+│   ├── dev/                      # QA panel (mock only, lazy chunk) and the D4-7 crash test
+│   ├── monitoring/               # D4-7: error reports, global error handlers, bazaarMonitoring console
+│   ├── journeys/, a11y/          # Cross-feature tests: the purchase journey, axe checks
 │   ├── cache/queryCache.ts       # D3-5: in-memory cache (LRU) used by useRequest({ staleTime })
 │   ├── errors/                   # D3-4: classifyError() → AppError kinds, isRetryable, load-error copy, error matrix test
 │   ├── features/                 # One folder per feature: its pages + components
@@ -121,7 +155,7 @@ bug-bazaar/
 │   │   ├── orders/               # Checkout (idempotency keys, 409 handling), order confirmation with polling
 │   │   ├── stock/                # D4-4: liveStock slice, startLiveStock + watch registry, LiveStockStatus, cart notices
 │   │   └── products/
-│   │       ├── components/       # Presentational: ProductFilters, ProductGrid, ProductCard, StockStatus, Pagination
+│   │       ├── components/       # Presentational: ProductFilters, ProductGrid, ProductCard, StockStatus, Pagination, VirtualProductGrid (D4-3 all view)
 │   │       ├── pages/            # Containers: ProductsPage (/), ProductDetailPage (/products/:id, + related)
 │   │       ├── filters.ts        # URL ⇄ filters (parse/serialize, the source of truth)
 │   │       ├── navigation.ts     # "Back to products" returns to the filtered list
@@ -141,7 +175,7 @@ bug-bazaar/
 │   │   └── connectApi.ts         # Session token → API client; 401 → session ended
 │   ├── styles/
 │   │   └── global.css
-│   ├── test/setup.ts             # Test setup (DOM matchers, cleanup)
+│   ├── test/                     # Test setup, TestApp (real App + fresh store), shared queries
 │   ├── utils/
 │   │   ├── formatPrice.ts        # Cents → "$19.99" (the only place)
 │   │   └── toError.ts
@@ -159,7 +193,10 @@ bug-bazaar/
 ├── public/
 │   ├── images/products/          # Category images used by product imageUrl
 │   └── mockServiceWorker.js      # Generated by MSW. Don't edit
-├── scripts/vitest.mjs            # Test launcher (Windows drive-letter fix)
+├── scripts/
+│   ├── vitest.mjs                # Test launcher (Windows drive-letter fix)
+│   ├── a11y-audit.mjs            # D4-1: Lighthouse accessibility gate (npm run a11y)
+│   └── perf-trace.mjs, perf-profile.mjs, perf-scroll.mjs  # D4-2/D4-3 measurements
 ├── .editorconfig  .gitattributes  .nvmrc
 ├── .env.example                  # Env template (copy to .env.local)
 ├── .prettierrc.json  .prettierignore
@@ -171,10 +208,7 @@ bug-bazaar/
 └── vite.config.ts
 ```
 
-Folders added by later tasks _(planned)_:
-
-| Folder | Purpose | Task |
-| ------ | ------- | ---- |
+The full picture (data flow, where each kind of state lives, design patterns) is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The CI workflows live at the repository root, in `.github/workflows/`.
 
 **Rules of thumb**
 
@@ -253,13 +287,14 @@ Follow [docs/workflow.md](docs/workflow.md). In short:
 | [docs/workflow.md](docs/workflow.md)                 | Development → QA process                           |
 | [docs/decisions.md](docs/decisions.md)               | Tool and approach choices per task                 |
 | [docs/api-contract.md](docs/api-contract.md)         | API contract and mock error triggers (D1-2)        |
-| `docs/auth.md`                                       | Token storage and trade-offs (D3-3)                |
-| `docs/performance.md`                                | Before/after measurements (D4-2, D4-3)             |
-| `docs/testing.md`                                    | How it is tested, the D4-5 map and audit, coverage |
-| `docs/ci.md`                                         | CI checks, branch protection, deploy (D4-6)        |
-| `docs/monitoring.md`                                 | Error logging and what to track (D4-7)             |
-| `docs/ARCHITECTURE.md`                               | Structure, data flow, state, patterns (D5-1, D5-2) |
-| `docs/orders.md`                                     | Queue-based order flow design (D5-3)               |
-| `docs/glossary.md`                                   | Architecture vocabulary (D5-4)                     |
+| [docs/auth.md](docs/auth.md)                         | Token storage and trade-offs (D3-3)                |
+| [docs/performance.md](docs/performance.md)           | Before/after measurements (D4-2, D4-3)             |
+| [docs/testing.md](docs/testing.md)                   | How it is tested, the D4-5 map and audit, coverage |
+| [docs/ci.md](docs/ci.md)                             | CI checks, branch protection, deploy (D4-6)        |
+| [docs/monitoring.md](docs/monitoring.md)             | Error logging and what to track (D4-7)             |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)         | Structure, data flow, state, patterns (D5-1, D5-2) |
+| [docs/orders.md](docs/orders.md)                     | Queue-based order flow design (D5-3)               |
+| [docs/glossary.md](docs/glossary.md)                 | Architecture vocabulary (D5-4)                     |
 | [docs/ai-notes.md](docs/ai-notes.md)                 | AI usage log (D5-7)                                |
-| `docs/reflection.md`                                 | Self-assessment (D5-8)                             |
+| [docs/reflection.md](docs/reflection.md)             | Self-assessment (D5-8)                             |
+| [docs/submission.md](docs/submission.md)             | PR checklist and walkthrough script (D5-9)         |

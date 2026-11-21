@@ -1349,3 +1349,25 @@ Full write-up: [reflection.md](reflection.md).
 - **Considered:**
   - **Rating by day:** too coarse; Day 3 has both a 9 and a 6.
   - **Listing every weakness as a gap:** the task asks for two, and two with real next steps are more useful than ten without.
+
+---
+
+## D5-9: Submission
+
+Full write-up: [submission.md](submission.md).
+
+- **Used:**
+  - **A submission page** with the evidence for each "Done when" check:
+    - **CI:** both workflow checks, which the PR's own run proves.
+    - **README:** completed. The status paragraph became a feature list, the folder tree was brought up to date, and every doc is linked.
+    - **One commit per task:** a command that counts commits by task ID.
+  - **The PR title and description,** ready to paste.
+  - **A timed 10-minute walkthrough script:** the shopping flow with what to click and say, one hard bug (the WebSocket captured before the mock patched it, D4-4), and one trade-off (server data kept out of Redux).
+- **The walkthrough was rehearsed in a real browser,** end to end: sign-in redirect, a 409, a 500 with Try again, the confirmation page, and the same idempotency key across retries.
+  - **It found a real bug.** After a 409, if stock had recovered before the page rechecked, the message said "we lowered the quantity" when nothing had changed. Fixed in its own commit, with a test that fails without it (see ai-notes).
+  - **It changed the script:** a _real_ 409 needs the live feed off, otherwise the feed lowers the cart before checkout ever returns a 409. The script now takes the feed down for 15 s first.
+- **Not done here:**
+  - **Opening the PR:** no GitHub CLI or token on this machine.
+  - **The partner reviews (D5-5, D5-6):** they need the partner.
+  - **The D4-6 repository settings:** they must come first, so the PR's checks are required.
+- **Considered:** a recorded video instead of a script. A script can be rehearsed and adjusted, and it lists the exact console commands, so a demo doesn't depend on remembering them.
