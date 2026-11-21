@@ -12,6 +12,9 @@ import type { Product } from "../../types/api.ts";
  */
 export const CATALOG_STALE_MS = 30_000;
 
+/** The all view (D4-3) loads in pages of this size: the contract's maximum. */
+export const ALL_VIEW_PAGE_SIZE = 100;
+
 /** Related products are suggestions: a few minutes old is fine. */
 export const RELATED_STALE_MS = 5 * 60_000;
 

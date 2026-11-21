@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getProducts } from "../../../api/index.ts";
 import BackToTop from "../../../components/BackToTop.tsx";
@@ -6,11 +6,12 @@ import LoadGate from "../../../components/LoadGate.tsx";
 import { EmptyState, LoadingState } from "../../../components/states.tsx";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle.ts";
 import { useRequest } from "../../../hooks/useRequest.ts";
-import { CATALOG_STALE_MS, listKey, seedProducts } from "../catalogCache.ts";
+import { ALL_VIEW_PAGE_SIZE, CATALOG_STALE_MS, listKey, seedProducts } from "../catalogCache.ts";
 import Pagination from "../components/Pagination.tsx";
 import ProductFilters from "../components/ProductFilters.tsx";
 import ProductGrid from "../components/ProductGrid.tsx";
 import {
+  DEFAULT_FILTERS,
   hasActiveFilters,
   parseFilters,
   resultSummary,
@@ -21,12 +22,28 @@ import {
 
 export const PAGE_SIZE = 24;
 
+// The all view is opt-in, so its code (the grid plus the virtualizer library,
+// ~11.5 KB gzipped) is a separate chunk, loaded only when someone opens it.
+// The default page's bundle stays as it was (D4-3, docs/performance.md).
+const VirtualProductGrid = lazy(() => import("../components/VirtualProductGrid.tsx"));
+
 /** Container: owns URL filters and loading. Filters/grid/pagination only render. */
 export default function ProductsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
   // Canonical string for "which results are we showing". It changes exactly when the query does.
   const queryKey = toSearchParams(filters).toString();
+  // The all view starts with a bigger first page; the virtual grid loads the rest.
+  const pageSize = filters.view === "all" ? ALL_VIEW_PAGE_SIZE : PAGE_SIZE;
+  // Filters and sort for the virtual grid's page requests (it sets page and size itself).
+  const allViewQuery = useMemo(() => {
+    const {
+      page: _page,
+      pageSize: _pageSize,
+      ...rest
+    } = toProductQuery(filters, ALL_VIEW_PAGE_SIZE);
+    return rest;
+  }, [filters]);
 
   // The key changes exactly when the query does: the previous request is
   // aborted and loading (or this query's cached results) shows at once, so
@@ -35,7 +52,7 @@ export default function ProductsPage() {
   const { state: products, retry } = useRequest(
     listKey(queryKey),
     async (signal) => {
-      const page = await getProducts(toProductQuery(filters, PAGE_SIZE), { signal });
+      const page = await getProducts(toProductQuery(filters, pageSize), { signal });
       seedProducts(page.items);
       return page;
     },
@@ -55,7 +72,8 @@ export default function ProductsPage() {
   }
 
   function clearFilters() {
-    setSearchParams(new URLSearchParams());
+    // Filters reset; the view (pages or all) is a display choice, so it stays.
+    setSearchParams(toSearchParams({ ...DEFAULT_FILTERS, view: filters.view }));
   }
 
   function goToPage(page: number) {
@@ -80,14 +98,34 @@ export default function ProductsPage() {
         onSearchPendingChange={setSearchPending}
       />
 
-      {/* Live region: screen readers hear the new count after each filter change. */}
-      <p className="result-count" role="status">
-        {searchPending
-          ? "Searching…"
-          : products.status === "success"
-            ? resultSummary(products.data.total, filters.search, filtered)
-            : ""}
-      </p>
+      <div className="results-bar">
+        {/* Live region: screen readers hear the new count after each filter change. */}
+        <p className="result-count" role="status">
+          {searchPending
+            ? "Searching…"
+            : products.status === "success"
+              ? resultSummary(products.data.total, filters.search, filtered)
+              : ""}
+        </p>
+        <div className="view-toggle" role="group" aria-label="Show">
+          <button
+            type="button"
+            className="view-toggle__option"
+            aria-pressed={filters.view === "pages"}
+            onClick={() => updateFilters({ view: "pages" })}
+          >
+            {PAGE_SIZE} per page
+          </button>
+          <button
+            type="button"
+            className="view-toggle__option"
+            aria-pressed={filters.view === "all"}
+            onClick={() => updateFilters({ view: "all" })}
+          >
+            All
+          </button>
+        </div>
+      </div>
 
       {/* Dimmed while a typed search is pending: never present old results as current. */}
       <div
@@ -117,6 +155,20 @@ export default function ProductsPage() {
           }
         >
           {({ items, total }) => {
+            if (filters.view === "all") {
+              return (
+                <Suspense fallback={<LoadingState label="Loading products…" variant="grid" />}>
+                  <VirtualProductGrid
+                    key={queryKey} // a new query starts a fresh list
+                    query={allViewQuery}
+                    queryKey={queryKey}
+                    total={total}
+                    firstPage={items}
+                    listSearch={searchParams.toString()}
+                  />
+                </Suspense>
+              );
+            }
             const totalPages = Math.ceil(total / PAGE_SIZE);
             if (items.length === 0) {
               // e.g. a stale link to page 40 of a search that now has 3 pages

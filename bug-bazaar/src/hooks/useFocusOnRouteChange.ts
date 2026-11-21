@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
-import { useLocation } from "react-router-dom";
+import { NavigationType, useLocation, useNavigationType } from "react-router-dom";
 
 /**
  * After an in-app navigation to a different page, move focus to that page's
@@ -13,9 +13,13 @@ import { useLocation } from "react-router-dom";
  * - Not on the first load: the browser and screen reader handle that.
  * - Pages whose heading arrives with their data (product details) focus it
  *   themselves when it renders; until then, focus goes to <main>.
+ * - On Back/Forward ("POP"), focus without scrolling: the page may restore
+ *   its own scroll position (the all-products list does, D4-3). New
+ *   navigations scroll to the heading, i.e. the top.
  */
 export function useFocusOnRouteChange(main: RefObject<HTMLElement | null>): void {
   const { pathname } = useLocation();
+  const navigationType = useNavigationType();
   const previous = useRef(pathname);
 
   useEffect(() => {
@@ -27,9 +31,9 @@ export function useFocusOnRouteChange(main: RefObject<HTMLElement | null>): void
     if (heading) {
       // Focusable from code without joining the Tab order.
       if (!heading.hasAttribute("tabindex")) heading.setAttribute("tabindex", "-1");
-      heading.focus();
+      heading.focus({ preventScroll: navigationType === NavigationType.Pop });
     } else {
-      region.focus();
+      region.focus({ preventScroll: navigationType === NavigationType.Pop });
     }
-  }, [pathname, main]);
+  }, [pathname, main, navigationType]);
 }

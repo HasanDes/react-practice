@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Link } from "react-router-dom";
 import { StarIcon } from "../../../components/icons.tsx";
 import type { Product } from "../../../types/api.ts";
@@ -10,6 +11,17 @@ type ProductCardProps = {
   headingLevel?: 2 | 3;
   product: Product;
   listSearch: string;
+  /**
+   * In the virtualized "all" view (D4-3): the card's place in the whole
+   * result set (0-based index, and the set size), so a screen reader says
+   * "3 of 5,000" although only a few rows exist in the DOM. Two numbers, not
+   * an object: a new { index, total } on every render would defeat memo.
+   */
+  positionIndex?: number;
+  setSize?: number;
+  /** In the virtualized view, the first card of each row is measured (row height). */
+  measureRef?: (element: HTMLLIElement | null) => void;
+  rowIndex?: number;
 };
 
 /**
@@ -20,14 +32,35 @@ type ProductCardProps = {
  *   text, so tabbing through 24 cards isn't a wall of noise. Price and stock
  *   are read as normal content around it.
  * - The image is decorative (a category illustration next to the name), so alt="".
+ *
+ * Memoized (D4-3): in the virtualized all view the grid re-renders on every
+ * scroll frame, and without memo every visible card re-rendered with it
+ * (11,830 card renders in a 7 s scroll; 590 with memo, frames over 33 ms
+ * 24.5% → 13.4%). Its props are primitives or stable references on purpose:
+ * an object prop created per render would defeat memo (the first version
+ * did exactly that). See docs/performance.md.
  */
-export default function ProductCard({ product, listSearch, headingLevel = 2 }: ProductCardProps) {
+export default memo(function ProductCard({
+  product,
+  listSearch,
+  headingLevel = 2,
+  positionIndex,
+  setSize,
+  measureRef,
+  rowIndex,
+}: ProductCardProps) {
   const Heading = headingLevel === 2 ? "h2" : "h3";
   const linkState: FromListState = { listSearch };
   const { id, name, price, stock, imageUrl, rating } = product;
 
   return (
-    <li className="product-card">
+    <li
+      className="product-card"
+      ref={measureRef}
+      data-index={rowIndex}
+      aria-posinset={positionIndex === undefined ? undefined : positionIndex + 1}
+      aria-setsize={setSize}
+    >
       <img
         className="product-card__image"
         src={imageUrl}
@@ -53,4 +86,4 @@ export default function ProductCard({ product, listSearch, headingLevel = 2 }: P
       </div>
     </li>
   );
-}
+});

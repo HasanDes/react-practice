@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isAbortError } from "../api/index.ts";
 import { queryCache as appCache, type QueryCache } from "../cache/queryCache.ts";
 import { requestState, type RequestState } from "../types/request.ts";
@@ -93,10 +93,14 @@ export function useRequest<T>(
     return () => controller.abort();
   }, [key, attempt, staleTime, cache]);
 
-  const retry = useCallback(() => {
+  // A plain function, not useCallback (removed in D4-3): every caller hands
+  // it to LoadGate, which isn't memoized and wraps it in a new function each
+  // render anyway, and nothing has it in effect dependencies. A stable
+  // identity would be thrown away one level down. See docs/performance.md.
+  function retry() {
     setState(requestState.loading());
     setAttempt((current) => current + 1);
-  }, []);
+  }
 
   return { state, retry };
 }

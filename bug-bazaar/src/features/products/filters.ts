@@ -15,12 +15,20 @@ import {
   type SortOption,
 } from "../../types/api.ts";
 
+/**
+ * "pages": 24 per page with page numbers (the default). "all": every matching
+ * product in one scrolling, virtualized list (D4-3). A display mode, not a
+ * filter: clearing filters keeps it.
+ */
+export type ListView = "pages" | "all";
+
 export type ProductFilters = {
   search: string;
   category: Category | null;
   inStock: boolean;
   sort: SortOption;
   page: number;
+  view: ListView;
 };
 
 export const DEFAULT_FILTERS: Readonly<ProductFilters> = {
@@ -29,6 +37,7 @@ export const DEFAULT_FILTERS: Readonly<ProductFilters> = {
   inStock: false,
   sort: "relevance",
   page: 1,
+  view: "pages",
 };
 
 /**
@@ -46,7 +55,9 @@ export function parseFilters(params: URLSearchParams): ProductFilters {
     category: isCategory(category) ? category : null,
     inStock: params.get("inStock") === "true",
     sort: isSortOption(sort) ? sort : DEFAULT_FILTERS.sort,
-    page: Number.isInteger(page) && page > 1 ? page : 1,
+    view: params.get("view") === "all" ? "all" : "pages",
+    // The all view has no pages, so a page number in its URL means nothing.
+    page: params.get("view") !== "all" && Number.isInteger(page) && page > 1 ? page : 1,
   };
 }
 
@@ -61,11 +72,12 @@ export function toSearchParams(filters: ProductFilters): URLSearchParams {
   if (filters.category) params.set("category", filters.category);
   if (filters.inStock) params.set("inStock", "true");
   if (filters.sort !== DEFAULT_FILTERS.sort) params.set("sort", filters.sort);
-  if (filters.page > 1) params.set("page", String(filters.page));
+  if (filters.view === "all") params.set("view", "all");
+  else if (filters.page > 1) params.set("page", String(filters.page));
   return params;
 }
 
-/** Any filter (other than the page) differs from the default. */
+/** Any filter (other than the page and the view) differs from the default. */
 export function hasActiveFilters(filters: ProductFilters): boolean {
   return (
     filters.search !== DEFAULT_FILTERS.search ||

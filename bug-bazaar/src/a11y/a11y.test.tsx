@@ -86,6 +86,11 @@ describe("axe: no violations on any page or state", () => {
   }[] = [
     { name: "home", path: "/", ready: () => screen.findAllByRole("listitem") },
     { name: "product details", path: "/products/p-0001", ready: () => screen.findByText(/^More /) },
+    {
+      name: "all products view (virtualized)",
+      path: "/?view=all",
+      ready: () => screen.findByRole("list", { name: /^All [\d,]+ products$/ }),
+    },
     { name: "cart (empty)", path: "/cart", ready: () => screen.findByText("Your cart is empty") },
     {
       name: "cart (with items)",

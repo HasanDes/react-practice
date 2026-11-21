@@ -960,3 +960,51 @@ main:focus {
   color: #b7791f;
   vertical-align: -0.125em;
 }
+
+/* ---- List view toggle and the virtualized "all" view (D4-3) ---- */
+
+.results-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.results-bar .result-count {
+  margin: 0;
+}
+
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid #9aa5b1;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.view-toggle__option {
+  min-height: 2.75rem;
+  padding: 0 0.9rem;
+  border: none;
+  border-radius: 0;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+}
+
+.view-toggle__option + .view-toggle__option {
+  border-left: 1px solid #9aa5b1;
+}
+
+.view-toggle__option[aria-pressed="true"] {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+/* Rows are laid out by the grid; the virtualizer supplies the padding above
+   and below and the column count (inline styles). */
+.product-grid--virtual {
+  box-sizing: border-box;
+}

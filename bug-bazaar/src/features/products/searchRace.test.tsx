@@ -120,7 +120,11 @@ describe("search always shows results for the latest query", () => {
     expect(searchRequests.map((request) => request.search)).toEqual(typed);
     const older = searchRequests.filter((request) => request.search !== "duck");
     expect(older.filter((request) => request.signal.aborted).length).toBeGreaterThanOrEqual(2);
-  });
+    // Real timers on purpose (real debounce, real out-of-order delays): about
+    // 2.5 s of deliberate waiting. Alone it takes ~3 s, but under the full
+    // parallel suite it once crossed Vitest's 5 s default (D4-3). A generous
+    // limit keeps it from being flaky in CI, where a failure blocks merging.
+  }, 15_000);
 
   it("typing fast sends one request, for the final query only", async () => {
     const { user } = renderStore(); // no pauses between keystrokes
