@@ -69,11 +69,19 @@ function renderAt(path: string) {
 
 const nameOf = (id: string) => db.getProduct(id)?.name ?? "";
 
-/** Record every product name that is ever rendered as the page heading. */
+/**
+ * Record every product name that is ever rendered as the page heading.
+ *
+ * Selects the page's <h1> by meaning, not a tag + class. This used to look
+ * for "h2.page-heading"; when D4-1 made page headings <h1>, it silently
+ * recorded nothing, and the "never shown" assertions below passed without
+ * checking anything (found in the D4-5 audit). Each test now also asserts
+ * the recorder saw the current product, so it can't go blind again.
+ */
 function recordHeadings() {
   const seen = new Set<string>();
   const record = () => {
-    document.querySelectorAll("h2.page-heading").forEach((heading) => {
+    document.querySelectorAll("main h1").forEach((heading) => {
       if (heading.textContent) seen.add(heading.textContent);
     });
   };
@@ -102,7 +110,8 @@ describe("switching products quickly", () => {
     expect(screen.getByRole("heading", { level: 1, name: nameOf("p-0002") })).toBeInTheDocument();
     headings.stop();
 
-    expect(headings.seen.has(nameOf("p-0001"))).toBe(false); // never shown, not even briefly
+    expect(headings.seen.has(nameOf("p-0002"))).toBe(true); // the recorder works…
+    expect(headings.seen.has(nameOf("p-0001"))).toBe(false); // …and p-0001 never showed, not even briefly
     expect(productSignals["p-0001"]?.every((signal) => signal.aborted)).toBe(true); // actually cancelled
   });
 
@@ -120,7 +129,8 @@ describe("switching products quickly", () => {
     await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
     headings.stop();
 
-    expect([...headings.seen].filter((name) => name !== nameOf("p-0002"))).toEqual([]);
+    expect(headings.seen.has(nameOf("p-0002"))).toBe(true); // the recorder works…
+    expect([...headings.seen].filter((name) => name !== nameOf("p-0002"))).toEqual([]); // …and nothing else showed
     expect(productSignals["p-0001"]?.every((signal) => signal.aborted)).toBe(true);
     expect(productSignals["p-0003"]?.every((signal) => signal.aborted)).toBe(true);
     expect(productSignals["p-0002"]?.some((signal) => !signal.aborted)).toBe(true);

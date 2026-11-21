@@ -141,12 +141,11 @@ describe("search always shows results for the latest query", () => {
 
     await user.type(searchBox(), "du");
     expect(summary()).toBe("Searching…");
+    // Marked busy for assistive tech (and dimmed by CSS) while the new search is pending.
     const results = document.querySelector(".results");
-    expect(results).toHaveClass("results--stale");
     expect(results).toHaveAttribute("aria-busy", "true");
 
     await screen.findByText(/products for “du”/, undefined, { timeout: 3000 });
-    expect(results).not.toHaveClass("results--stale");
     expect(results).toHaveAttribute("aria-busy", "false");
   });
 

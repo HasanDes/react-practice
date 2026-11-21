@@ -19,7 +19,8 @@
     "test": "node scripts/vitest.mjs run",
     "test:watch": "node scripts/vitest.mjs",
     "a11y": "npm run build && node scripts/a11y-audit.mjs",
-    "perf": "npm run build && node scripts/perf-trace.mjs"
+    "perf": "npm run build && node scripts/perf-trace.mjs",
+    "test:coverage": "node scripts/vitest.mjs run --coverage"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.15.0",
@@ -40,6 +41,7 @@
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^6.3.0",
+    "@vitest/coverage-v8": "^5.1.1",
     "axe-core": "^4.14.1",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",

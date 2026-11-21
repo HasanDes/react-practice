@@ -24,7 +24,7 @@ export default function CartLink() {
       <span className="cart-link__text" aria-hidden="true">
         Cart
       </span>
-      <span className="cart-link__badge" aria-hidden="true" data-testid="cart-badge">
+      <span className="cart-link__badge" aria-hidden="true">
         {count}
       </span>
       <span className="visually-hidden">{label}</span>

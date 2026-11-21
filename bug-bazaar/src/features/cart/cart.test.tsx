@@ -12,6 +12,7 @@ import { createDb, createMemoryStorage, type MockDb } from "../../mocks/db.ts";
 import { createHandlers } from "../../mocks/handlers.ts";
 import { makeStore, type AppStore } from "../../store/store.ts";
 import TestApp from "../../test/TestApp.tsx";
+import { cartCount } from "../../test/queries.ts";
 import { formatPrice } from "../../utils/formatPrice.ts";
 import { itemAdded, quantityChanged } from "./cartSlice.ts";
 
@@ -38,7 +39,8 @@ function renderAt(path: string) {
   return { user };
 }
 
-const badge = () => screen.getByTestId("cart-badge");
+/** The cart count as the header announces it ("Cart, 3 items"). */
+const badge = () => cartCount();
 
 describe("header badge", () => {
   it("starts at 0 and counts units added from the details page", async () => {
@@ -48,12 +50,12 @@ describe("header badge", () => {
 
     const add = await screen.findByRole("button", { name: "Add to cart" });
     await user.click(add);
-    expect(badge()).toHaveTextContent("1");
+    expect(badge()).toBe(1);
     expect(screen.getByRole("link", { name: "Cart, 1 item" })).toBeInTheDocument();
     expect(screen.getByText(/Added to cart\. You have 1 in your cart\./)).toBeInTheDocument();
 
     await user.click(add);
-    expect(badge()).toHaveTextContent("2");
+    expect(badge()).toBe(2);
   });
 
   it("stops at stock: the button disables once all stock is in the cart", async () => {
@@ -62,7 +64,7 @@ describe("header badge", () => {
     await user.click(await screen.findByRole("button", { name: "Add to cart" }));
     await user.click(screen.getByRole("button", { name: "Add to cart" }));
 
-    expect(badge()).toHaveTextContent("2");
+    expect(badge()).toBe(2);
     expect(
       screen.getByRole("button", { name: /all available stock is in your cart/i }),
     ).toBeDisabled();
@@ -76,7 +78,7 @@ describe("header badge", () => {
     act(() => {
       store.dispatch(quantityChanged({ productId: "p-0042", quantity: 7 }));
     });
-    expect(badge()).toHaveTextContent("7");
+    expect(badge()).toBe(7);
   });
 
   it("sold-out products can't be added", async () => {

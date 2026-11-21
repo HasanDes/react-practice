@@ -15,6 +15,7 @@ import { createHandlers } from "../../mocks/handlers.ts";
 import { createStockFeedServer, type StockFeedServer } from "../../mocks/stockFeed.ts";
 import { makeStore, type AppStore } from "../../store/store.ts";
 import TestApp from "../../test/TestApp.tsx";
+import { cartCount } from "../../test/queries.ts";
 import { itemAdded } from "../cart/cartSlice.ts";
 import { startLiveStock } from "./liveStock.tsx";
 
@@ -91,16 +92,21 @@ describe("stock updates live", () => {
     const product = db.getProduct("p-0001");
     if (!product) throw new Error("missing");
     store.dispatch(itemAdded({ product, quantity: 3 }));
-    renderAt("/cart");
+    const { user } = renderAt("/cart");
     await connected();
 
     act(() => {
       db.setStock("p-0001", 1);
     });
-    expect(
-      await screen.findByText(/only has 1 left now, so we lowered the quantity/),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId("cart-badge")).toHaveTextContent("1");
+    const notice = await screen.findByText(/only has 1 left now, so we lowered the quantity/);
+    expect(notice.closest("[role=status]")).not.toBeNull(); // announced
+    expect(cartCount()).toBe(1);
+
+    // Read it, dismiss it: it's gone.
+    await user.click(
+      screen.getByRole("button", { name: `Dismiss the notice about ${product.name}` }),
+    );
+    expect(screen.queryByText(/only has 1 left now/)).not.toBeInTheDocument();
   });
 });
 

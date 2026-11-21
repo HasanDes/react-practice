@@ -87,7 +87,9 @@ describe("empty and not-found states", () => {
     renderAt("/?search=no-such-product");
     const title = await screen.findByText("No products match your filters");
     const card = title.closest(".state");
-    expect(card).toHaveClass("state--neutral");
+    // Not an error: nothing is announced as an alert.
+    expect(card).not.toHaveAttribute("role", "alert");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(
       within(card as HTMLElement).getByRole("button", { name: "Clear filters" }),
     ).toBeInTheDocument();
@@ -97,7 +99,10 @@ describe("empty and not-found states", () => {
     renderAt("/products/p-9999");
     const title = await screen.findByText("Product not found");
     const card = title.closest(".state") as HTMLElement;
-    expect(card).toHaveClass("state--neutral");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument(); // not an error
+    expect(
+      within(card).getByRole("heading", { level: 1, name: "Product not found" }),
+    ).toBeInTheDocument();
     expect(within(card).queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
     expect(within(card).getByRole("link", { name: /back to products/i })).toBeInTheDocument();
   });

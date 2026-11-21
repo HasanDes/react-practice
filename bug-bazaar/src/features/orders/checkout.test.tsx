@@ -15,6 +15,7 @@ import { createHandlers } from "../../mocks/handlers.ts";
 import { connectApiToStore } from "../../store/connectApi.ts";
 import { makeStore, type AppStore, type RootState } from "../../store/store.ts";
 import TestApp from "../../test/TestApp.tsx";
+import { cartCount } from "../../test/queries.ts";
 import type { OrderItem, Product } from "../../types/api.ts";
 import { formatPrice } from "../../utils/formatPrice.ts";
 import { itemAdded } from "../cart/cartSlice.ts";
@@ -84,7 +85,8 @@ const addToCart = (id: string, quantity: number): void =>
   act(() => {
     store.dispatch(itemAdded({ product: product(id), quantity }));
   });
-const badge = () => screen.getByTestId("cart-badge").textContent;
+/** The cart count as the header announces it ("Cart, 3 items"). */
+const badge = () => String(cartCount());
 
 describe("cart editing: quantities can't exceed stock", () => {
   it("+ and − change the quantity, and + stops at stock", async () => {
