@@ -30,13 +30,13 @@ export default [
       // so allow capitalized names and leading underscores.
       "no-unused-vars": ["error", { varsIgnorePattern: "^[A-Z_]", argsIgnorePattern: "^_" }],
       eqeqeq: ["error", "always"],
-      "no-console": ["warn", { allow: ["warn", "error"] }],
+      "no-console": ["warn", { allow: ["warn", "error", "info", "table"] }],
     },
   },
 
   // Node-side config files.
   {
-    files: ["*.config.js"],
+    files: ["*.config.js", "scripts/**/*.{js,mjs}"],
     languageOptions: { globals: globals.node },
   },
 
