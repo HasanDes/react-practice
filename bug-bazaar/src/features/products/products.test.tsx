@@ -82,12 +82,20 @@ describe("product grid", () => {
     const first = catalogProduct(1);
     const second = catalogProduct(2);
 
-    // Skip link → site title → first card. One Tab stop per card.
-    await user.tab();
-    expect(screen.getByRole("link", { name: "Skip to content" })).toHaveFocus();
-    await user.tab();
-    await user.tab();
-    expect(screen.getByRole("link", { name: first.name })).toHaveFocus();
+    // Skip link → site title → each filter control → first card. One Tab stop per card.
+    const expectedOrder = [
+      screen.getByRole("link", { name: "Skip to content" }),
+      screen.getByRole("link", { name: /the bug bazaar/i }),
+      screen.getByRole("searchbox", { name: "Search" }),
+      screen.getByRole("combobox", { name: "Category" }),
+      screen.getByRole("combobox", { name: "Sort by" }),
+      screen.getByRole("checkbox", { name: "In stock only" }),
+      screen.getByRole("link", { name: first.name }),
+    ];
+    for (const element of expectedOrder) {
+      await user.tab();
+      expect(element).toHaveFocus();
+    }
     await user.tab();
     expect(screen.getByRole("link", { name: second.name })).toHaveFocus();
 

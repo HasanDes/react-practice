@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
 import type { Product } from "../../../types/api.ts";
 import { formatPrice } from "../../../utils/formatPrice.ts";
+import type { FromListState } from "../navigation.ts";
 import StockStatus from "./StockStatus.tsx";
 
 type ProductCardProps = {
   product: Product;
+  listSearch: string;
 };
 
 /**
@@ -16,7 +18,8 @@ type ProductCardProps = {
  *   are read as normal content around it.
  * - The image is decorative (a category illustration next to the name), so alt="".
  */
-export default function ProductCard({ product }: ProductCardProps) {
+export default function ProductCard({ product, listSearch }: ProductCardProps) {
+  const linkState: FromListState = { listSearch };
   const { id, name, price, stock, imageUrl, rating } = product;
 
   return (
@@ -31,7 +34,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       />
       <div className="product-card__body">
         <h3 className="product-card__name">
-          <Link to={`/products/${id}`} className="product-card__link">
+          <Link to={`/products/${id}`} state={linkState} className="product-card__link">
             {name}
           </Link>
         </h3>

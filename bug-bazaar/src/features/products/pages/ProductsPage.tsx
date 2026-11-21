@@ -1,43 +1,70 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { getProducts, isAbortError } from "../../../api/index.ts";
 import LoadGate from "../../../components/LoadGate.tsx";
 import type { ProductListResponse } from "../../../types/api.ts";
 import { requestState, type RequestState } from "../../../types/request.ts";
 import { toError } from "../../../utils/toError.ts";
 import Pagination from "../components/Pagination.tsx";
+import ProductFilters from "../components/ProductFilters.tsx";
 import ProductGrid from "../components/ProductGrid.tsx";
+import {
+  hasActiveFilters,
+  parseFilters,
+  toProductQuery,
+  toSearchParams,
+  type ProductFilters as Filters,
+} from "../filters.ts";
 
 export const PAGE_SIZE = 24;
 
-/** Container: owns loading and paging. ProductGrid/ProductCard only render. */
+/** Container: owns URL filters and loading. Filters/grid/pagination only render. */
 export default function ProductsPage() {
-  // Page is local state for now. D2-2 moves page and filters into the URL.
-  const [page, setPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
+  // Canonical string for "which results are we showing". It changes exactly when the query does.
+  const queryKey = toSearchParams(filters).toString();
+
   const [attempt, setAttempt] = useState(0);
   const [products, setProducts] = useState<RequestState<ProductListResponse>>(
     requestState.loading(),
   );
   const headingRef = useRef<HTMLHeadingElement>(null);
 
-  useEffect(() => {
-    // Cancel the request if the page changes or the component unmounts,
-    // so a slow, stale response can never overwrite a newer one.
-    const controller = new AbortController();
+  // New query → show loading right away (adjusted during render, no stale flash).
+  const [shownKey, setShownKey] = useState(queryKey);
+  if (queryKey !== shownKey) {
+    setShownKey(queryKey);
+    setProducts(requestState.loading());
+  }
 
-    getProducts({ page, pageSize: PAGE_SIZE }, { signal: controller.signal })
+  useEffect(() => {
+    const controller = new AbortController();
+    const query = toProductQuery(parseFilters(new URLSearchParams(queryKey)), PAGE_SIZE);
+
+    getProducts(query, { signal: controller.signal })
       .then((data) => setProducts(requestState.success(data)))
       .catch((error: unknown) => {
         if (!isAbortError(error)) setProducts(requestState.error(toError(error)));
       });
 
+    // Changing filters (or leaving) cancels the old request, so a slow,
+    // stale response can never overwrite newer results.
     return () => controller.abort();
-  }, [page, attempt]);
+  }, [queryKey, attempt]);
 
-  function goToPage(next: number) {
-    setProducts(requestState.loading());
-    setPage(next);
-    // Keyboard and screen reader users would otherwise be left at the
-    // pagination buttons at the bottom. focus() also scrolls the heading into view.
+  /** Push a new URL. Changing any filter starts again at page 1. */
+  function updateFilters(changes: Partial<Filters>) {
+    setSearchParams(toSearchParams({ ...filters, page: 1, ...changes }));
+  }
+
+  function clearFilters() {
+    setSearchParams(new URLSearchParams());
+  }
+
+  function goToPage(page: number) {
+    setSearchParams(toSearchParams({ ...filters, page }));
+    // Don't strand keyboard users at the bottom. focus() also scrolls it into view.
     headingRef.current?.focus();
   }
 
@@ -46,33 +73,65 @@ export default function ProductsPage() {
     setAttempt((current) => current + 1);
   }
 
+  const filtered = hasActiveFilters(filters);
+
   return (
     <section aria-labelledby="products-heading">
       <h2 id="products-heading" ref={headingRef} tabIndex={-1} className="page-heading">
         Products
       </h2>
+
+      <ProductFilters filters={filters} onFiltersChange={updateFilters} onClear={clearFilters} />
+
+      {/* Live region: screen readers hear the new count after each filter change. */}
+      <p className="result-count" role="status">
+        {products.status === "success" ? resultSummary(products.data.total, filtered) : ""}
+      </p>
+
       <LoadGate
         state={products}
         onRetry={retry}
         loadingText="Loading products…"
         errorText="We couldn't load products. Please try again."
       >
-        {({ items, total }) =>
-          items.length === 0 ? (
-            <p className="state state--empty">No products found.</p>
-          ) : (
+        {({ items, total }) => {
+          if (total === 0) {
+            return (
+              <div className="state state--empty">
+                <p>{filtered ? "No products match your filters." : "No products yet."}</p>
+                {filtered && (
+                  <button type="button" onClick={clearFilters}>
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            );
+          }
+          const totalPages = Math.ceil(total / PAGE_SIZE);
+          if (items.length === 0) {
+            // e.g. a stale link to page 40 of a search that now has 3 pages
+            return (
+              <div className="state state--empty">
+                <p>That page doesn&apos;t exist for these results.</p>
+                <button type="button" onClick={() => goToPage(1)}>
+                  Go to page 1
+                </button>
+              </div>
+            );
+          }
+          return (
             <>
-              <p className="result-count">{total.toLocaleString("en-US")} products</p>
-              <ProductGrid products={items} />
-              <Pagination
-                page={page}
-                totalPages={Math.ceil(total / PAGE_SIZE)}
-                onPageChange={goToPage}
-              />
+              <ProductGrid products={items} listSearch={searchParams.toString()} />
+              <Pagination page={filters.page} totalPages={totalPages} onPageChange={goToPage} />
             </>
-          )
-        }
+          );
+        }}
       </LoadGate>
     </section>
   );
+}
+
+function resultSummary(total: number, filtered: boolean): string {
+  const count = `${total.toLocaleString("en-US")} ${total === 1 ? "product" : "products"}`;
+  return filtered ? `${count} match your filters` : count;
 }

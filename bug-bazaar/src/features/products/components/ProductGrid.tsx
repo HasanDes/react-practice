@@ -3,6 +3,8 @@ import ProductCard from "./ProductCard.tsx";
 
 type ProductGridProps = {
   products: readonly Product[];
+  /** Current list query string, so details can link back to this exact view. */
+  listSearch: string;
 };
 
 /**
@@ -14,11 +16,11 @@ type ProductGridProps = {
  * Tab order is what keyboard and screen reader users expect, and a list
  * announces "list, 24 items".
  */
-export default function ProductGrid({ products }: ProductGridProps) {
+export default function ProductGrid({ products, listSearch }: ProductGridProps) {
   return (
     <ul className="product-grid">
       {products.map((product) => (
-        <ProductCard key={product.id} product={product} />
+        <ProductCard key={product.id} product={product} listSearch={listSearch} />
       ))}
     </ul>
   );

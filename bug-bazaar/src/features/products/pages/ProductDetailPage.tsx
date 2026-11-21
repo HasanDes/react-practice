@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { getProduct, isAbortError, isApiRequestError } from "../../../api/index.ts";
 import LoadGate from "../../../components/LoadGate.tsx";
 import type { Product } from "../../../types/api.ts";
@@ -7,6 +7,7 @@ import { requestState, type RequestState } from "../../../types/request.ts";
 import { formatPrice } from "../../../utils/formatPrice.ts";
 import { toError } from "../../../utils/toError.ts";
 import StockStatus from "../components/StockStatus.tsx";
+import { productListHref } from "../navigation.ts";
 
 /**
  * Route entry: keys the page by id, so moving from one product to another
@@ -106,8 +107,10 @@ function ProductDetails({ product }: { product: Product }) {
 }
 
 function BackLink() {
+  // Back to the exact filtered list this product was opened from (or "/").
+  const state: unknown = useLocation().state;
   return (
-    <Link to="/" className="back-link">
+    <Link to={productListHref(state)} className="back-link">
       ← Back to products
     </Link>
   );
