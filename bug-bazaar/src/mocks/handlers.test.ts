@@ -399,6 +399,16 @@ describe("mock controls and persistence", () => {
     }
   });
 
+  it("can simulate a dropped connection on any route (fetch rejects, no response)", async () => {
+    await expect(
+      fetch(`${BASE}/products`, { headers: { "x-mock-error": "network" } }),
+    ).rejects.toThrow();
+
+    controls.fail("products:get", "network", { once: true });
+    await expect(fetch(`${BASE}/products/p-0001`)).rejects.toThrow();
+    expect((await call("/products/p-0001")).status).toBe(200); // one-shot consumed
+  });
+
   it("keeps sessions and stock across a reload (same storage, new db)", () => {
     const storage = createMemoryStorage();
     const first = createDb({ storage });

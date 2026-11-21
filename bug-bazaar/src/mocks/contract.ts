@@ -26,6 +26,9 @@ export const ROUTE_ERRORS = {
 export type MockRoute = keyof typeof ROUTE_ERRORS;
 export type MockErrorStatus = (typeof ROUTE_ERRORS)[MockRoute][number];
 
+/** A forced failure: a documented HTTP status, or "network" (connection dropped, no response). */
+export type MockFailure = MockErrorStatus | "network";
+
 export const ERROR_CODES = {
   VALIDATION_ERROR: "VALIDATION_ERROR",
   INVALID_CREDENTIALS: "INVALID_CREDENTIALS",

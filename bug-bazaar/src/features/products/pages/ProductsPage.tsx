@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getProducts, isAbortError } from "../../../api/index.ts";
 import LoadGate from "../../../components/LoadGate.tsx";
+import { EmptyState, LoadingState } from "../../../components/states.tsx";
 import type { ProductListResponse } from "../../../types/api.ts";
 import { requestState, type RequestState } from "../../../types/request.ts";
 import { toError } from "../../../utils/toError.ts";
@@ -91,32 +92,44 @@ export default function ProductsPage() {
       <LoadGate
         state={products}
         onRetry={retry}
-        loadingText="Loading products…"
-        errorText="We couldn't load products. Please try again."
+        subject="products"
+        loading={<LoadingState label="Loading products…" variant="grid" />}
+        isEmpty={({ total }) => total === 0}
+        empty={
+          filtered ? (
+            <EmptyState
+              title="No products match your filters"
+              description="Try a different search, or clear the filters to see everything."
+              action={
+                <button type="button" className="button button--primary" onClick={clearFilters}>
+                  Clear filters
+                </button>
+              }
+            />
+          ) : (
+            <EmptyState icon="📦" title="No products yet" description="Check back soon." />
+          )
+        }
       >
         {({ items, total }) => {
-          if (total === 0) {
-            return (
-              <div className="state state--empty">
-                <p>{filtered ? "No products match your filters." : "No products yet."}</p>
-                {filtered && (
-                  <button type="button" onClick={clearFilters}>
-                    Clear filters
-                  </button>
-                )}
-              </div>
-            );
-          }
           const totalPages = Math.ceil(total / PAGE_SIZE);
           if (items.length === 0) {
             // e.g. a stale link to page 40 of a search that now has 3 pages
             return (
-              <div className="state state--empty">
-                <p>That page doesn&apos;t exist for these results.</p>
-                <button type="button" onClick={() => goToPage(1)}>
-                  Go to page 1
-                </button>
-              </div>
+              <EmptyState
+                icon="📄"
+                title="That page doesn't exist"
+                description={`These results only have ${String(totalPages)} ${totalPages === 1 ? "page" : "pages"}.`}
+                action={
+                  <button
+                    type="button"
+                    className="button button--primary"
+                    onClick={() => goToPage(1)}
+                  >
+                    Go to page 1
+                  </button>
+                }
+              />
             );
           }
           return (

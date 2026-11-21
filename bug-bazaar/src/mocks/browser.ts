@@ -11,7 +11,11 @@ import { createHandlers } from "./handlers.ts";
 type ControlsSnapshot = ReturnType<MockControls["snapshot"]>;
 
 export type BazaarMockConsole = {
-  fail: (route: string, status: number, options?: { once?: boolean }) => ControlsSnapshot;
+  fail: (
+    route: string,
+    status: number | "network",
+    options?: { once?: boolean },
+  ) => ControlsSnapshot;
   clear: (route?: string) => ControlsSnapshot;
   latency: (ms: number, jitter?: number) => ControlsSnapshot;
   setStock: (productId: string, stock: number) => Product | undefined;
@@ -93,7 +97,7 @@ function createConsoleApi(db: MockDb, controls: MockControls): BazaarMockConsole
       console.info(
         [
           `Demo login: ${DEMO_USER.email} / ${DEMO_USER.password}`,
-          "bazaarMock.fail(route, status, { once })  force an error",
+          'bazaarMock.fail(route, status, { once })  force an error (status or "network")',
           "bazaarMock.clear(route?)                   stop forcing errors",
           "bazaarMock.latency(ms, jitter?)            slow responses (jitter reorders them)",
           "bazaarMock.setStock(productId, n)          change stock",

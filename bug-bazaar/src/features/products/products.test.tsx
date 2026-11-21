@@ -129,7 +129,9 @@ describe("product details", () => {
 
   it("shows a not-found message for an unknown product", async () => {
     renderAt("/products/p-9999");
-    expect(await screen.findByRole("heading", { name: "Product not found" })).toBeInTheDocument();
+    expect(await screen.findByText("Product not found")).toBeInTheDocument();
+    // The page header link plus the not-found card's own way out.
+    expect(screen.getAllByRole("link", { name: /back to products/i })).toHaveLength(2);
   });
 });
 

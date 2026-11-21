@@ -2,12 +2,12 @@
 // Exposed in the browser as `window.bazaarMock` (see browser.ts) so QA can
 // trigger every UI state on purpose without editing code.
 
-import { ROUTE_ERRORS, type MockErrorStatus, type MockRoute } from "./contract.ts";
+import { ROUTE_ERRORS, type MockFailure, type MockRoute } from "./contract.ts";
 import type { StorageLike } from "./db.ts";
 
 const STORAGE_KEY = "bazaar:mock-controls:v1";
 
-type Failure = { status: MockErrorStatus; once: boolean };
+type Failure = { status: MockFailure; once: boolean };
 
 type ControlsState = {
   latencyMs: number;
@@ -27,8 +27,9 @@ export function isMockRoute(value: unknown): value is MockRoute {
 }
 
 /** Is `status` one of the documented errors for `route`? Narrows `status` if so. */
-export function isAllowed(route: MockRoute, status: number): status is MockErrorStatus {
-  return (ROUTE_ERRORS[route] as readonly number[]).includes(status);
+export function isAllowed(route: MockRoute, status: number | "network"): status is MockFailure {
+  // A dropped connection can happen on any route; HTTP statuses follow the contract.
+  return status === "network" || (ROUTE_ERRORS[route] as readonly number[]).includes(status);
 }
 
 export function createControls({
@@ -90,7 +91,11 @@ export function createControls({
      * Takes plain strings/numbers because it's called from the browser console.
      * `once: true` fails only the next request.
      */
-    fail(route: string, status: number, { once = false }: { once?: boolean } = {}): void {
+    fail(
+      route: string,
+      status: number | "network",
+      { once = false }: { once?: boolean } = {},
+    ): void {
       if (!isMockRoute(route)) {
         throw new Error(
           `Unknown route "${route}". Routes: ${Object.keys(ROUTE_ERRORS).join(", ")}`,
@@ -98,7 +103,7 @@ export function createControls({
       }
       if (!isAllowed(route, status)) {
         throw new Error(
-          `"${route}" can't return ${status}. Allowed: ${ROUTE_ERRORS[route].join(", ")}`,
+          `"${route}" can't return ${status}. Allowed: ${ROUTE_ERRORS[route].join(", ")}, network`,
         );
       }
       state.failures = { ...state.failures, [route]: { status, once } };
@@ -109,7 +114,7 @@ export function createControls({
     clear,
 
     /** Return (and consume, if one-shot) the forced status for a route. */
-    takeFailure(route: MockRoute): MockErrorStatus | null {
+    takeFailure(route: MockRoute): MockFailure | null {
       const failure = state.failures[route];
       if (!failure) return null;
       if (failure.once) clear(route);

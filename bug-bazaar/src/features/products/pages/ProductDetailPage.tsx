@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { getProduct, isAbortError, isApiRequestError } from "../../../api/index.ts";
 import LoadGate from "../../../components/LoadGate.tsx";
+import { EmptyState, LoadingState } from "../../../components/states.tsx";
 import type { Product } from "../../../types/api.ts";
 import { requestState, type RequestState } from "../../../types/request.ts";
 import { formatPrice } from "../../../utils/formatPrice.ts";
@@ -40,28 +41,25 @@ function ProductDetailPage({ id }: { id: string }) {
     setAttempt((current) => current + 1);
   }
 
-  if (
-    product.status === "error" &&
-    isApiRequestError(product.error) &&
-    product.error.status === 404
-  ) {
-    return (
-      <section className="product-detail">
-        <h2 className="page-heading">Product not found</h2>
-        <p>We couldn&apos;t find that product. It may have been removed.</p>
-        <BackLink />
-      </section>
-    );
-  }
-
   return (
     <section className="product-detail">
       <BackLink />
       <LoadGate
         state={product}
         onRetry={retry}
-        loadingText="Loading product…"
-        errorText="We couldn't load this product. Please try again."
+        subject="this product"
+        loading={<LoadingState label="Loading product…" variant="detail" />}
+        renderError={(error) =>
+          // 404 isn't a failure to retry: the product doesn't exist. Show "not found" instead.
+          isApiRequestError(error) && error.status === 404 ? (
+            <EmptyState
+              icon="🦆"
+              title="Product not found"
+              description="We couldn't find that product. It may have been removed, or the link is wrong."
+              action={<BackLink className="button button--primary" />}
+            />
+          ) : null
+        }
       >
         {(data) => <ProductDetails product={data} />}
       </LoadGate>
@@ -106,11 +104,11 @@ function ProductDetails({ product }: { product: Product }) {
   );
 }
 
-function BackLink() {
+function BackLink({ className = "back-link" }: { className?: string }) {
   // Back to the exact filtered list this product was opened from (or "/").
   const state: unknown = useLocation().state;
   return (
-    <Link to={productListHref(state)} className="back-link">
+    <Link to={productListHref(state)} className={className}>
       ← Back to products
     </Link>
   );

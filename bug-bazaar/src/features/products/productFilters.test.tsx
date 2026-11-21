@@ -196,8 +196,8 @@ describe("clearing filters", () => {
 
   it("an empty result offers a way out", async () => {
     const { user } = renderAt("/?search=zzz-nothing");
-    expect(await screen.findByText("No products match your filters.")).toBeInTheDocument();
-    const emptyState = screen.getByText("No products match your filters.").parentElement;
+    const emptyTitle = await screen.findByText("No products match your filters");
+    const emptyState = emptyTitle.closest<HTMLElement>(".state");
     await user.click(
       within(emptyState ?? document.body).getByRole("button", { name: "Clear filters" }),
     );

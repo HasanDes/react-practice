@@ -98,10 +98,11 @@ function outOfStock(
  * Per-request override for scripts, curl and tests:
  * `x-mock-error: 500` header or `?mockError=500` query param.
  */
-function requestedError(request: Request): number | null {
+function requestedError(request: Request): number | "network" | null {
   const raw =
     request.headers.get("x-mock-error") ?? new URL(request.url).searchParams.get("mockError");
-  return raw ? Number(raw) : null;
+  if (!raw) return null;
+  return raw === "network" ? "network" : Number(raw);
 }
 
 /** Parse the body as `unknown`: callers must narrow it, never trust it. */
@@ -141,10 +142,11 @@ export function createHandlers({ db, controls }: { db: MockDb; controls: MockCon
     const status = requestedError(request) ?? controls.takeFailure(route);
     if (status === null) return null;
     if (!isAllowed(route, status)) {
-      console.warn(`[mock] Ignoring forced ${status} on "${route}": not in its contract.`);
+      console.warn(`[mock] Ignoring forced ${String(status)} on "${route}": not in its contract.`);
       return null;
     }
-    return forcedError(route, status, context);
+    // "network": the connection drops with no response (fetch rejects), like being offline.
+    return status === "network" ? HttpResponse.error() : forcedError(route, status, context);
   }
 
   const unauthorized = () => forcedError("me", 401);

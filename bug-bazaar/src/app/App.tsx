@@ -1,7 +1,12 @@
+import { lazy, Suspense } from "react";
 import { Link, Route, Routes } from "react-router-dom";
 import ProductDetailRoute from "../features/products/pages/ProductDetailPage.tsx";
 import ProductsPage from "../features/products/pages/ProductsPage.tsx";
 import NotFoundPage from "./NotFoundPage.tsx";
+
+// QA tool for the mock API: its own chunk, loaded only while mocking is on.
+const QaPanel = lazy(() => import("../dev/QaPanel.tsx"));
+const mockEnabled = import.meta.env.VITE_USE_MOCK_API !== "false";
 
 export default function App() {
   return (
@@ -23,6 +28,11 @@ export default function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
+      {mockEnabled && (
+        <Suspense fallback={null}>
+          <QaPanel />
+        </Suspense>
+      )}
     </div>
   );
 }
