@@ -955,3 +955,38 @@ The probe reads the **accessibility tree**, the data NVDA, Narrator and VoiceOve
   - the live region holds the announcement
   - Remove focuses "H1 Your cart"
   - the login errors are as described above
+
+---
+
+## D4-2: Performance
+
+Full measurements: [performance.md](performance.md).
+
+### Measure first, in a real browser
+
+- **Used:** `scripts/perf-trace.mjs` (`npm run perf`): Chrome traces of a cold first visit to the product list, with 4× CPU throttling, cache off and mock latency 0. Builds are **interleaved** (before, after, before, …) and the median of 11 is taken. `scripts/perf-profile.mjs` gives CPU profiles and interaction latency for typing, paging and sorting.
+- **Why interleaved:** back-to-back batches drifted by about 100 ms between sessions on the same machine. One batch had a polluted "after" that looked twice as slow. Alternating builds spreads that drift evenly.
+- **Why not just Lighthouse:** it scored 100 before and after. Its LCP is the heading (painted before any card), and its simulated throttling barely models font and paint costs. It's a reference, not the tool.
+- **Considered:** the React Profiler. With 24 items per page, React work per interaction is small (no long tasks, worst interaction 48 ms at 4× CPU). The time was in the browser's layout and paint, which a trace shows and the React Profiler doesn't.
+
+### The two slowest spots, and the fixes
+
+1. **Fallback-font glyphs on the critical path.**
+   - **Cause:** the header emoji and the rating star made the browser load fallback fonts during layout.
+   - **How it was confirmed:** removing them as an experiment roughly halved the first layout.
+   - **Fix:** inline SVG icons (`src/components/icons.tsx`).
+   - **Result:** cards visible **720 → 593 ms**, LCP **992 → 844 ms**, layout **366 → 240 ms**.
+2. **The skeleton shimmer repainted on the main thread every frame.**
+   - **Cause:** it animated `background-position`.
+   - **Fix:** a `transform` animation on an overlay, which the compositor runs off the main thread.
+   - **Result:** with a 1 s load, paints while loading fell **587 → 35** and paint time **240 → 14 ms**, leaving the main thread free while the list loads.
+
+- **Considered for spot 2:** a single opacity pulse on the whole grid, which would be even cheaper, but the shimmer's sense of motion is the established loading cue. Simply switching the animation off (already done for reduced motion) was not an option for everyone.
+
+### Tried and rejected
+
+- **Render before the mock is ready:** the shell appeared 95 ms sooner, but LCP got 68 ms worse and the cards were no sooner, because rendering competed with mock start-up. Reverted. The details and when to revisit are in performance.md.
+
+### A mistake in my own tooling
+
+- The trace script's "runs" argument regex lost its backslash (`/^d+$/`), so every "9 runs" request quietly ran 5. I noticed while adding interleaving and fixed it. All numbers in performance.md come from runs after the fix.
