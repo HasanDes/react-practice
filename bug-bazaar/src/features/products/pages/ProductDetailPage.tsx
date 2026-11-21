@@ -1,14 +1,33 @@
+// Product details page.
+//
+// Every side effect here cleans up after itself (D2-4):
+//   effect                      | cleanup
+//   ----------------------------|---------------------------------------------
+//   fetch the product           | abort it (switching products, retrying, leaving)
+//   fetch related products      | abort it
+//   document title              | restore the previous title
+//   Back to Top scroll listener | remove the listener, cancel the pending frame
+//   focus the heading           | none needed (one-off, synchronous)
+// And the route is keyed by id, so switching products mounts a fresh page:
+// state can never carry over from the previous product.
+
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { getProduct, isAbortError, isApiRequestError } from "../../../api/index.ts";
+import { getProduct, getProducts, isAbortError, isApiRequestError } from "../../../api/index.ts";
+import BackToTop from "../../../components/BackToTop.tsx";
 import LoadGate from "../../../components/LoadGate.tsx";
 import { EmptyState, LoadingState } from "../../../components/states.tsx";
+import { useDocumentTitle } from "../../../hooks/useDocumentTitle.ts";
 import type { Product } from "../../../types/api.ts";
 import { requestState, type RequestState } from "../../../types/request.ts";
 import { formatPrice } from "../../../utils/formatPrice.ts";
 import { toError } from "../../../utils/toError.ts";
+import ProductGrid from "../components/ProductGrid.tsx";
 import StockStatus from "../components/StockStatus.tsx";
-import { productListHref } from "../navigation.ts";
+import { CATEGORY_LABELS } from "../filters.ts";
+import { listSearchFrom, productListHref } from "../navigation.ts";
+
+export const RELATED_COUNT = 4;
 
 /**
  * Route entry: keys the page by id, so moving from one product to another
@@ -24,7 +43,9 @@ function ProductDetailPage({ id }: { id: string }) {
   const [product, setProduct] = useState<RequestState<Product>>(requestState.loading());
 
   useEffect(() => {
-    // Abort if the user leaves (or retries) before the response arrives.
+    // Abort if the user switches product, retries or leaves before the
+    // response arrives, so a slow answer for the *previous* product can
+    // never be written into this page.
     const controller = new AbortController();
 
     getProduct(id, { signal: controller.signal })
@@ -35,6 +56,12 @@ function ProductDetailPage({ id }: { id: string }) {
 
     return () => controller.abort();
   }, [id, attempt]);
+
+  const notFound =
+    product.status === "error" && isApiRequestError(product.error) && product.error.status === 404;
+  useDocumentTitle(
+    product.status === "success" ? product.data.name : notFound ? "Product not found" : null,
+  );
 
   function retry() {
     setProduct(requestState.loading());
@@ -49,9 +76,9 @@ function ProductDetailPage({ id }: { id: string }) {
         onRetry={retry}
         subject="this product"
         loading={<LoadingState label="Loading product…" variant="detail" />}
-        renderError={(error) =>
+        renderError={() =>
           // 404 isn't a failure to retry: the product doesn't exist. Show "not found" instead.
-          isApiRequestError(error) && error.status === 404 ? (
+          notFound ? (
             <EmptyState
               icon="🦆"
               title="Product not found"
@@ -61,8 +88,14 @@ function ProductDetailPage({ id }: { id: string }) {
           ) : null
         }
       >
-        {(data) => <ProductDetails product={data} />}
+        {(data) => (
+          <>
+            <ProductDetails product={data} />
+            <RelatedProducts product={data} />
+          </>
+        )}
       </LoadGate>
+      <BackToTop />
     </section>
   );
 }
@@ -93,7 +126,7 @@ function ProductDetails({ product }: { product: Product }) {
         <StockStatus stock={product.stock} />
         <dl className="product-detail__facts">
           <dt>Category</dt>
-          <dd className="capitalize">{product.category}</dd>
+          <dd>{CATEGORY_LABELS[product.category]}</dd>
           <dt>Rating</dt>
           <dd>{product.rating.toFixed(1)} out of 5</dd>
           <dt>Product ID</dt>
@@ -101,6 +134,56 @@ function ProductDetails({ product }: { product: Product }) {
         </dl>
       </div>
     </article>
+  );
+}
+
+/** Top-rated items from the same category: a second request, cancelled the same way. */
+function RelatedProducts({ product }: { product: Product }) {
+  const { id, category } = product;
+  const [attempt, setAttempt] = useState(0);
+  const [related, setRelated] = useState<RequestState<Product[]>>(requestState.loading());
+  const listSearch = listSearchFrom(useLocation().state);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    getProducts(
+      { category, sort: "rating-desc", pageSize: RELATED_COUNT + 1 },
+      { signal: controller.signal },
+    )
+      .then(({ items }) =>
+        setRelated(
+          requestState.success(items.filter((item) => item.id !== id).slice(0, RELATED_COUNT)),
+        ),
+      )
+      .catch((error: unknown) => {
+        if (!isAbortError(error)) setRelated(requestState.error(toError(error)));
+      });
+
+    return () => controller.abort();
+  }, [id, category, attempt]);
+
+  return (
+    <section className="related" aria-labelledby="related-heading">
+      <h3 id="related-heading" className="related__heading">
+        More {CATEGORY_LABELS[category].toLowerCase()}
+      </h3>
+      <LoadGate
+        state={related}
+        onRetry={() => {
+          setRelated(requestState.loading());
+          setAttempt((current) => current + 1);
+        }}
+        subject="related products"
+        loading={
+          <LoadingState label="Loading related products…" variant="grid" count={RELATED_COUNT} />
+        }
+        isEmpty={(items) => items.length === 0}
+        empty={<EmptyState title="Nothing else in this category yet" />}
+      >
+        {(items) => <ProductGrid products={items} listSearch={listSearch} />}
+      </LoadGate>
+    </section>
   );
 }
 

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getProducts, isAbortError } from "../../../api/index.ts";
+import BackToTop from "../../../components/BackToTop.tsx";
 import LoadGate from "../../../components/LoadGate.tsx";
 import { EmptyState, LoadingState } from "../../../components/states.tsx";
 import type { ProductListResponse } from "../../../types/api.ts";
 import { requestState, type RequestState } from "../../../types/request.ts";
+import { useDocumentTitle } from "../../../hooks/useDocumentTitle.ts";
 import { toError } from "../../../utils/toError.ts";
 import Pagination from "../components/Pagination.tsx";
 import ProductFilters from "../components/ProductFilters.tsx";
@@ -75,6 +77,7 @@ export default function ProductsPage() {
   }
 
   const filtered = hasActiveFilters(filters);
+  useDocumentTitle(filters.search ? `"${filters.search}" · Products` : "Products");
 
   return (
     <section aria-labelledby="products-heading">
@@ -140,6 +143,7 @@ export default function ProductsPage() {
           );
         }}
       </LoadGate>
+      <BackToTop />
     </section>
   );
 }

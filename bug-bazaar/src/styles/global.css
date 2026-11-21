@@ -471,7 +471,7 @@ main:focus {
 
 .qa-panel {
   position: fixed;
-  right: 1rem;
+  left: 1rem;
   bottom: 1rem;
   z-index: 20;
   max-width: 18rem;
@@ -503,4 +503,30 @@ main:focus {
   text-align: left;
   font-size: 0.8125rem;
   color: var(--color-text);
+}
+
+/* ---- Back to top + related products ----------------------------------------- */
+
+.back-to-top {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 15;
+  min-height: 2.75rem;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--color-accent);
+  border: none;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
+}
+
+.related {
+  margin-top: 2rem;
+}
+
+.related__heading {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
 }

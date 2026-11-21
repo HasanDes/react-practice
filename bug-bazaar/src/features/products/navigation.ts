@@ -18,3 +18,8 @@ export function isFromListState(value: unknown): value is FromListState {
 export function productListHref(state: unknown): string {
   return isFromListState(state) && state.listSearch ? `/?${state.listSearch}` : "/";
 }
+
+/** The list query to carry forward (e.g. when opening a related product), or "". */
+export function listSearchFrom(state: unknown): string {
+  return isFromListState(state) ? state.listSearch : "";
+}
