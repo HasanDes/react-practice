@@ -341,7 +341,7 @@ The in-stock filter uses the `inStock=true` extension added in D1-2. Filtering c
 
 ### Error copy by failure kind, never the raw message
 
-- **Used:** `describeLoadError(error, subject)` in `src/utils/describeError.ts` branches on the `ApiRequestError` kind and status from D1-4:
+- **Used:** `describeLoadError(error, subject)` in `src/utils/describeError.ts` (moved to `src/errors/` and rebuilt on `classifyError()` in D3-4) branches on the `ApiRequestError` kind and status from D1-4:
 
   | Kind                          | Title                      |
   | ----------------------------- | -------------------------- |
@@ -708,3 +708,64 @@ Full write-up, including the token-storage trade-off: [auth.md](auth.md).
   - `returnTo=/.//evil.test` stayed on the same origin
   - logout went home, showed "Sign in", and the storage was cleared
   - no console errors
+
+---
+
+## D3-4: Backend errors
+
+### One way: classify, then switch on the kind
+
+- **Used:** `classifyError(error)` in `src/errors/appError.ts` turns **anything thrown** into one `AppError` kind. It's the only place that looks at HTTP statuses, `ApiRequestError.kind` or "is this even an API error". Every consumer switches on the kind:
+  - `LoadGate` → `ErrorState`, for every page that loads data
+  - the login form
+  - `placeOrder` (checkout)
+  - the 404 handling on product and order pages
+- **Before:** four places did this differently. `describeLoadError` branched on status, the login page had its own status checks, `placeOrder` had its own switch, and two pages checked `error.status === 404` inline.
+- **Considered:**
+  - A global toast or interceptor that reacts to every error. One place, but it can't know the context: a 404 on a product is a page, while a 409 at checkout needs the cart's item names. So the classifier is central, and the _response_ stays where the context is.
+  - Mapping server `code` strings (`OUT_OF_STOCK`, …). The status is enough for every decision this app makes. Codes would tie the UI to message-like strings.
+
+### The policy
+
+| Server says            | Kind                               | What the user gets                                                                                                                                                                               | Where                          |
+| ---------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| 400                    | `invalid-input` (field names only) | **Form field errors**: each named field marked `aria-invalid`, our own wording, focus on the first. Checkout: "review your cart".                                                                | Login, checkout                |
+| 401                    | `unauthenticated`                  | **Signed out** (the client hook, D3-3) and sent to sign in with a return path. The cart is kept. On _login_, a 401 means wrong credentials instead.                                              | Every authenticated call       |
+| 404                    | `not-found`                        | **A Not Found page**: one `NotFoundState` card with a heading and a way out, the same for the catch-all route, a missing product and a missing order. **No Try again**: the thing doesn't exist. | `LoadGate notFound`, `*` route |
+| 409                    | `out-of-stock` (product ids only)  | **An out-of-stock message** naming each item (from our cart), with the cart corrected (D3-2).                                                                                                    | Checkout                       |
+| 5xx, bad response      | `server`                           | **A retry option**: "Our server hit a problem. It's not you." plus Try again.                                                                                                                    | Everywhere                     |
+| no response            | `offline` / `timeout`              | "You seem to be offline" / "This is taking too long", plus Try again.                                                                                                                            | Everywhere                     |
+| other 4xx, our own bug | `unexpected`                       | "Something went wrong", plus Try again.                                                                                                                                                          | Everywhere                     |
+| we aborted it          | `cancelled`                        | Nothing (stale requests are ignored, D2-6).                                                                                                                                                      | —                              |
+
+- **Try again only when repeating can help** (`isRetryable`): offline, timeout, server and unexpected. A retry button on a 404, a 400 or a 401 would just fail again.
+- **Order confirmation is now protected** (`RequireAuth`). Before, a signed-out visitor got a 401 that was ignored (no session to end) and saw a generic error. Now they sign in and come back.
+
+### Raw messages never reach the screen: by construction, by lint, by test
+
+1. **By construction:** `AppError` carries no server text. From `details` it keeps only the **keys** (field names, product ids), used as lookups. The wording comes from our tables. A server message has no path to the UI through the classifier.
+2. **By lint:** an ESLint rule in UI folders (`app`, `components`, `features`, `hooks`, `dev`) rejects any `.message` property access. Checked with a probe file. The login page's own field was renamed `formError` to keep the rule simple.
+3. **By test:** `errorMatrix.test.tsx` runs the real app for **every route × every status the contract documents, plus a dropped connection** (23 cases, derived from `ROUTE_ERRORS`). A guard test fails if a new route or status is added without an expectation. The server body puts a sentinel string in `code`, `message` **and** every `details` value. Each case asserts the expected response (field errors, sign-in, Not Found, item named, Try again) **and** that the sentinel appears nowhere on the page.
+
+### Proving it
+
+- **Unit tests** for the classifier (every status and kind, details keep keys only, non-API errors), `isRetryable`, and the load copy, including "never contains the raw message".
+- **Mutation checks**, each caught:
+
+  | Mutation                             | Failing tests                                                           |
+  | ------------------------------------ | ----------------------------------------------------------------------- |
+  | `ErrorState` appends the raw message | 4 (the 500 cases with a body; a dropped connection has no body to leak) |
+  | checkout prints the raw message      | 9                                                                       |
+  | `LoadGate` ignores `notFound`        | 2                                                                       |
+  | 409 treated as a server error        | 1                                                                       |
+  | 404 classification removed           | 4                                                                       |
+  | 5xx classification removed           | 7                                                                       |
+
+- **Real browser** (headless Edge, production build, mock controls):
+  - a list 500 showed "Our server hit a problem" with Try again; after stopping errors, Try again recovered
+  - `/products/p-9999`, `/orders/o-99999` and `/no/such/page` each showed the Not Found card, with an `<h2>` heading, the right tab title and no Try again
+  - a real stock shortage at checkout named the item ("Decaf Pods #1 only has 1 left, so we lowered the quantity")
+  - a 500 at checkout offered Try again, and after the errors stopped the order went through
+  - an expired session on `/account` sent the user to sign in with the notice
+  - no console errors
+- **Probe false positive:** the browser check's text scan flagged "only has" on the 409 screen. Our copy and the mock's raw message share those words. The raw message is `"Decaf Pods #1" only has 1 left.` (quoted). The screen shows ours. The matrix test avoids this ambiguity with a sentinel string no copy could contain.

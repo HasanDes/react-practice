@@ -6,7 +6,7 @@ A small React + TypeScript (strict) store that sells developer gear: rubber duck
 - **Dev → QA workflow:** [docs/workflow.md](docs/workflow.md)
 - **Decisions log:** [docs/decisions.md](docs/decisions.md) (updated every task)
 
-> **Current status: Day 3 in progress. D3-1 to D3-3 done.** Browse, filter and add to cart; **edit the cart** (stock-capped), which **survives a reload**; **sign in** (demo: `dev@bugbazaar.test` / `rubberduck`) and come back to where you were; **check out** with idempotent retries and 409 handling; see the order confirmation with live status. Checkout and the account page are protected, and an expired session sends you to sign in without losing the cart.
+> **Current status: Day 3 in progress. D3-1 to D3-4 done.** Browse, filter and add to cart; **edit the cart** (stock-capped), which **survives a reload**; **sign in** (demo: `dev@bugbazaar.test` / `rubberduck`) and come back to where you were; **check out** with idempotent retries and 409 handling; see the order confirmation with live status. Checkout and the account page are protected, and an expired session sends you to sign in without losing the cart. Every API error is handled one way: field errors, sign-in, a Not Found page, named out-of-stock items, or Try again, and never the server's raw text.
 
 ---
 
@@ -110,8 +110,9 @@ bug-bazaar/
 │   │   ├── LoadGate.tsx          # RequestState → loading / error / empty / success
 │   │   └── states.tsx            # LoadingState (skeletons), EmptyState, ErrorState
 │   ├── dev/QaPanel.tsx           # QA panel: trigger any UI state (mock only, lazy chunk)
+│   ├── errors/                   # D3-4: classifyError() → AppError kinds, isRetryable, load-error copy, error matrix test
 │   ├── features/                 # One folder per feature: its pages + components
-│   │   ├── auth/sessionSlice.ts  # Session: anonymous | authenticated (token + user)
+│   │   ├── auth/                 # sessionSlice, sessionStorage, returnTo (safe redirects), RequireAuth, AccountLink, LoginPage, AccountPage
 │   │   ├── cart/                 # cartSlice + selectors, cartStorage (persist/validate), CartLink, AddToCart, QuantityStepper, CartPage
 │   │   ├── orders/               # Checkout (idempotency keys, 409 handling), order confirmation with polling
 │   │   └── products/
@@ -136,7 +137,6 @@ bug-bazaar/
 │   │   └── global.css
 │   ├── test/setup.ts             # Test setup (DOM matchers, cleanup)
 │   ├── utils/
-│   │   ├── describeError.ts      # Error kind → friendly copy (never raw messages)
 │   │   ├── formatPrice.ts        # Cents → "$19.99" (the only place)
 │   │   └── toError.ts
 │   ├── vite-env.d.ts             # Typed import.meta.env
@@ -222,7 +222,7 @@ bazaarMock.reset(); // wipe orders, sessions, stock changes
 | 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                                                | —   | ✅     |
 | 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer ✅                                                 | 15  | ✅     |
 | 2   | Browse     | D2-1 Product list ✅ · D2-2 Filters ✅ · D2-3 UI states ✅ · D2-4 Effects cleanup ✅ · D2-5 Custom hooks ✅ · D2-6 Race conditions ✅ | 21  | ✅     |
-| 3   | Buy        | D3-1 Redux Toolkit ✅ · D3-2 Cart ✅ · D3-3 Auth ✅ · D3-4 Backend errors · D3-5 Caching                                              | 21  | 🟡     |
+| 3   | Buy        | D3-1 Redux Toolkit ✅ · D3-2 Cart ✅ · D3-3 Auth ✅ · D3-4 Backend errors ✅ · D3-5 Caching                                           | 21  | 🟡     |
 | 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring                  | 22  | ⬜     |
 | 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission                                         | 21  | ⬜     |
 
