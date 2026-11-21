@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
+import { isSeverity, SEVERITIES, type NewBug, type Severity } from "../types.ts";
 
-const SEVERITIES = ["Low", "Medium", "High"];
+type BugFormProps = {
+  onAddBug: (bug: NewBug) => void;
+};
 
-export default function BugForm({ onAddBug }) {
+export default function BugForm({ onAddBug }: BugFormProps) {
   const [title, setTitle] = useState("");
-  const [severity, setSeverity] = useState("Low");
-  const [error, setError] = useState(null);
+  const [severity, setSeverity] = useState<Severity>("Low");
+  const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(event) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const trimmedTitle = title.trim();
@@ -38,7 +41,13 @@ export default function BugForm({ onAddBug }) {
       </label>
       <label>
         Severity
-        <select value={severity} onChange={(event) => setSeverity(event.target.value)}>
+        <select
+          value={severity}
+          onChange={(event) => {
+            // <select> values are plain strings; narrow instead of casting.
+            if (isSeverity(event.target.value)) setSeverity(event.target.value);
+          }}
+        >
           {SEVERITIES.map((option) => (
             <option key={option} value={option}>
               {option}

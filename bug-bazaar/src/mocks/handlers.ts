@@ -5,9 +5,26 @@
 // different storage and zero latency.
 
 import { delay, http, HttpResponse } from "msw";
-import { ERROR_CODES as CODES, MAX_ORDER_QUANTITY } from "./contract.js";
-import { isAllowed } from "./controls.js";
-import { parseProductQuery, queryProducts } from "./queryProducts.js";
+import type {
+  ApiError,
+  ApiErrorCode,
+  CreateOrderResponse,
+  LoginResponse,
+  Order,
+  OrderItem,
+  Product,
+  ProductListResponse,
+  User,
+} from "../types/api.ts";
+import {
+  ERROR_CODES as CODES,
+  MAX_ORDER_QUANTITY,
+  type MockErrorStatus,
+  type MockRoute,
+} from "./contract.ts";
+import { isAllowed, type MockControls } from "./controls.ts";
+import type { MockDb } from "./db.ts";
+import { parseProductQuery, queryProducts } from "./queryProducts.ts";
 
 // "*/api/..." matches any origin, so it works for relative URLs in the
 // browser and absolute URLs in Node tests alike.
@@ -15,15 +32,20 @@ const API = "*/api";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Build a response with the contract's ApiError body. */
-export function apiError(status, code, message, details) {
-  return HttpResponse.json(
-    { error: { code, message, ...(details ? { details } : {}) } },
-    { status },
-  );
+export function apiError(
+  status: number,
+  code: ApiErrorCode,
+  message: string,
+  details?: Record<string, string>,
+) {
+  const body: ApiError = { error: { code, message, ...(details ? { details } : {}) } };
+  return HttpResponse.json(body, { status });
 }
 
+type ForcedContext = { productId?: string | undefined; productName?: string | undefined };
+
 /** Canned bodies for errors forced via controls, header or query param. */
-function forcedError(route, status, context = {}) {
+function forcedError(route: MockRoute, status: MockErrorStatus, context: ForcedContext = {}) {
   switch (status) {
     case 400:
       return route === "login"
@@ -41,11 +63,11 @@ function forcedError(route, status, context = {}) {
       return route === "orders:get"
         ? apiError(404, CODES.ORDER_NOT_FOUND, "Order not found.")
         : apiError(404, CODES.PRODUCT_NOT_FOUND, "Product not found.");
-    case 409: {
-      const { productId = "p-0001", productName = "An item" } = context;
-      return outOfStock([{ id: productId, name: productName, stock: 0 }]);
-    }
-    default:
+    case 409:
+      return outOfStock([
+        { id: context.productId ?? "p-0001", name: context.productName ?? "An item", stock: 0 },
+      ]);
+    case 500:
       return apiError(
         500,
         CODES.INTERNAL_ERROR,
@@ -55,7 +77,12 @@ function forcedError(route, status, context = {}) {
 }
 
 /** 409 body that names every item that ran out (D3-2: "a 409 names the item"). */
-function outOfStock(products) {
+function outOfStock(
+  products: readonly [
+    Pick<Product, "id" | "name" | "stock">,
+    ...Pick<Product, "id" | "name" | "stock">[],
+  ],
+) {
   const [first] = products;
   const message =
     products.length === 1
@@ -71,35 +98,43 @@ function outOfStock(products) {
  * Per-request override for scripts, curl and tests:
  * `x-mock-error: 500` header or `?mockError=500` query param.
  */
-function requestedError(request) {
+function requestedError(request: Request): number | null {
   const raw =
     request.headers.get("x-mock-error") ?? new URL(request.url).searchParams.get("mockError");
   return raw ? Number(raw) : null;
 }
 
-async function readJson(request) {
+/** Parse the body as `unknown`: callers must narrow it, never trust it. */
+async function readJson(request: Request): Promise<unknown> {
   try {
-    return await request.json();
+    return (await request.json()) as unknown;
   } catch {
     return null;
   }
 }
 
-function bearerToken(request) {
-  const header = request.headers.get("authorization") ?? "";
-  const [scheme, token] = header.split(" ");
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function bearerToken(request: Request): string | null {
+  const [scheme, token] = (request.headers.get("authorization") ?? "").split(" ");
   return scheme?.toLowerCase() === "bearer" && token ? token : null;
 }
 
-/**
- * @param {{ db: ReturnType<typeof import("./db.js").createDb>, controls: ReturnType<typeof import("./controls.js").createControls> }} deps
- */
-export function createHandlers({ db, controls }) {
+/** First cart line's productId from an untrusted order body, if present. */
+function firstProductId(body: unknown): string | undefined {
+  if (!isObject(body) || !Array.isArray(body["items"])) return undefined;
+  const first: unknown = body["items"][0];
+  return isObject(first) && typeof first["productId"] === "string" ? first["productId"] : undefined;
+}
+
+export function createHandlers({ db, controls }: { db: MockDb; controls: MockControls }) {
   /**
    * Runs before every handler: simulate latency, then apply any forced error.
    * Returns a Response to short-circuit, or null to continue.
    */
-  async function simulate(route, request, context) {
+  async function simulate(route: MockRoute, request: Request, context?: ForcedContext) {
     const ms = controls.nextDelay();
     if (ms > 0) await delay(ms);
 
@@ -112,10 +147,6 @@ export function createHandlers({ db, controls }) {
     return forcedError(route, status, context);
   }
 
-  function requireUser(request) {
-    return db.userForToken(bearerToken(request));
-  }
-
   const unauthorized = () => forcedError("me", 401);
 
   return [
@@ -124,18 +155,17 @@ export function createHandlers({ db, controls }) {
       if (forced) return forced;
 
       const query = parseProductQuery(new URL(request.url).searchParams);
-      return HttpResponse.json(queryProducts(db.listProducts(), query));
+      return HttpResponse.json<ProductListResponse>(queryProducts(db.listProducts(), query));
     }),
 
-    http.get(`${API}/products/:id`, async ({ request, params }) => {
+    http.get<{ id: string }>(`${API}/products/:id`, async ({ request, params }) => {
       const forced = await simulate("products:get", request);
       if (forced) return forced;
 
-      const product = db.getProduct(String(params.id));
-      if (!product) {
-        return apiError(404, CODES.PRODUCT_NOT_FOUND, "Product not found.");
-      }
-      return HttpResponse.json(product);
+      const product = db.getProduct(params.id);
+      return product
+        ? HttpResponse.json<Product>(product)
+        : apiError(404, CODES.PRODUCT_NOT_FOUND, "Product not found.");
     }),
 
     http.post(`${API}/login`, async ({ request }) => {
@@ -143,65 +173,71 @@ export function createHandlers({ db, controls }) {
       if (forced) return forced;
 
       const body = await readJson(request);
-      const email = typeof body?.email === "string" ? body.email.trim() : "";
-      const password = typeof body?.password === "string" ? body.password : "";
+      const email = isObject(body) && typeof body["email"] === "string" ? body["email"].trim() : "";
+      const password =
+        isObject(body) && typeof body["password"] === "string" ? body["password"] : "";
 
-      const details = {};
-      if (!email) details.email = "Email is required.";
-      else if (!EMAIL_PATTERN.test(email)) details.email = "Enter a valid email address.";
-      if (!password) details.password = "Password is required.";
+      const details: Record<string, string> = {};
+      if (!email) details["email"] = "Email is required.";
+      else if (!EMAIL_PATTERN.test(email)) details["email"] = "Enter a valid email address.";
+      if (!password) details["password"] = "Password is required.";
       if (Object.keys(details).length > 0) {
         return apiError(400, CODES.VALIDATION_ERROR, "Please fix the highlighted fields.", details);
       }
 
       const session = db.login(email, password);
-      if (!session) {
-        return apiError(401, CODES.INVALID_CREDENTIALS, "Email or password is incorrect.");
-      }
-      return HttpResponse.json(session);
+      return session
+        ? HttpResponse.json<LoginResponse>(session)
+        : apiError(401, CODES.INVALID_CREDENTIALS, "Email or password is incorrect.");
     }),
 
     http.get(`${API}/me`, async ({ request }) => {
       const forced = await simulate("me", request);
       if (forced) return forced;
 
-      const user = requireUser(request);
-      return user ? HttpResponse.json(user) : unauthorized();
+      const user = db.userForToken(bearerToken(request));
+      return user ? HttpResponse.json<User>(user) : unauthorized();
     }),
 
     http.post(`${API}/orders`, async ({ request }) => {
       // Read the body first (from a clone) so a forced 409 can name a real cart item.
       const body = await readJson(request.clone());
-      const firstProduct = db.getProduct(String(body?.items?.[0]?.productId ?? ""));
+      const firstProduct = db.getProduct(firstProductId(body) ?? "");
       const forced = await simulate("orders:create", request, {
         productId: firstProduct?.id,
         productName: firstProduct?.name,
       });
       if (forced) return forced;
 
-      const user = requireUser(request);
+      const user = db.userForToken(bearerToken(request));
       if (!user) return unauthorized();
 
-      const items = Array.isArray(body?.items) ? body.items : null;
-      if (!items || items.length === 0) {
+      const rawItems: unknown = isObject(body) ? body["items"] : undefined;
+      if (!Array.isArray(rawItems) || rawItems.length === 0) {
         return apiError(400, CODES.VALIDATION_ERROR, "The order is invalid.", {
           items: "Your cart is empty.",
         });
       }
 
-      const details = {};
-      items.forEach((item, index) => {
-        if (!db.getProduct(String(item?.productId))) {
-          details[`items.${index}.productId`] = "This product doesn't exist.";
-        }
-        if (
-          !Number.isInteger(item?.quantity) ||
-          item.quantity < 1 ||
-          item.quantity > MAX_ORDER_QUANTITY
-        ) {
+      const details: Record<string, string> = {};
+      const items: OrderItem[] = [];
+      rawItems.forEach((raw: unknown, index) => {
+        const productId = isObject(raw) ? raw["productId"] : undefined;
+        const quantity = isObject(raw) ? raw["quantity"] : undefined;
+
+        const validId = typeof productId === "string" && db.getProduct(productId) !== undefined;
+        const validQuantity =
+          typeof quantity === "number" &&
+          Number.isInteger(quantity) &&
+          quantity >= 1 &&
+          quantity <= MAX_ORDER_QUANTITY;
+
+        if (!validId) details[`items.${index}.productId`] = "This product doesn't exist.";
+        if (!validQuantity) {
           details[`items.${index}.quantity`] =
             `Quantity must be a whole number from 1 to ${MAX_ORDER_QUANTITY}.`;
         }
+        if (validId && validQuantity) items.push({ productId, quantity });
       });
       if (Object.keys(details).length > 0) {
         return apiError(400, CODES.VALIDATION_ERROR, "The order is invalid.", details);
@@ -209,24 +245,28 @@ export function createHandlers({ db, controls }) {
 
       const result = db.placeOrder({
         userId: user.id,
-        items: items.map(({ productId, quantity }) => ({ productId: String(productId), quantity })),
+        items,
         idempotencyKey: request.headers.get("idempotency-key"),
       });
-      if (!result.ok) return outOfStock(result.shortages);
+      if (!result.ok) {
+        const [first, ...rest] = result.shortages;
+        // placeOrder only returns ok:false with at least one shortage.
+        return first ? outOfStock([first, ...rest]) : forcedError("orders:create", 500);
+      }
 
-      return HttpResponse.json(result.order, { status: 201 });
+      return HttpResponse.json<CreateOrderResponse>(result.order, { status: 201 });
     }),
 
-    http.get(`${API}/orders/:id`, async ({ request, params }) => {
+    http.get<{ id: string }>(`${API}/orders/:id`, async ({ request, params }) => {
       const forced = await simulate("orders:get", request);
       if (forced) return forced;
 
-      const user = requireUser(request);
+      const user = db.userForToken(bearerToken(request));
       if (!user) return unauthorized();
 
-      const order = db.getOrder(String(params.id), user.id);
+      const order = db.getOrder(params.id, user.id);
       return order
-        ? HttpResponse.json(order)
+        ? HttpResponse.json<Order>(order)
         : apiError(404, CODES.ORDER_NOT_FOUND, "Order not found.");
     }),
   ];

@@ -1,8 +1,14 @@
 import { useState } from "react";
-import BugForm from "../components/BugForm.jsx";
-import BugList from "../components/BugList.jsx";
+import BugForm from "../components/BugForm.tsx";
+import BugList from "../components/BugList.tsx";
+import type { Bug, NewBug } from "../types.ts";
 
-export default function BoardPage({ bugs, onAddBug }) {
+type BoardPageProps = {
+  bugs: readonly Bug[];
+  onAddBug: (bug: NewBug) => void;
+};
+
+export default function BoardPage({ bugs, onAddBug }: BoardPageProps) {
   const [query, setQuery] = useState("");
 
   // Derived on every render, so it can never go out of sync with bugs or query.

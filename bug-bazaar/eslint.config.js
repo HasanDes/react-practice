@@ -1,44 +1,69 @@
 // ESLint flat config.
-// Catches correctness problems (hooks rules, unused vars, a11y). Formatting
-// is left entirely to Prettier: eslint-config-prettier goes last and turns
-// off any stylistic rule that would fight it.
+// Catches correctness problems (types, hooks rules, a11y). Formatting is left
+// entirely to Prettier: eslint-config-prettier goes last and turns off any
+// stylistic rule that would fight it.
 import js from "@eslint/js";
 import globals from "globals";
+import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import { reactRefresh } from "eslint-plugin-react-refresh";
 import jsxA11y from "eslint-plugin-jsx-a11y";
 import prettier from "eslint-config-prettier";
 
-export default [
+export default tseslint.config(
   { ignores: ["dist", "coverage", "node_modules", "public/mockServiceWorker.js"] },
 
   js.configs.recommended,
-  reactHooks.configs.flat["recommended-latest"],
-  reactRefresh.configs.vite(),
-  jsxA11y.flatConfigs.recommended,
 
+  // TypeScript: type-aware rules use the real type information from tsconfig.
   {
-    files: ["**/*.{js,jsx}"],
+    files: ["**/*.{ts,tsx}"],
+    extends: [tseslint.configs.strictTypeChecked],
     languageOptions: {
-      ecmaVersion: "latest",
-      sourceType: "module",
-      globals: globals.browser,
-      parserOptions: { ecmaFeatures: { jsx: true } },
+      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
     rules: {
-      // Without eslint-plugin-react, ESLint can't see that JSX uses a component,
-      // so allow capitalized names and leading underscores.
-      "no-unused-vars": ["error", { varsIgnorePattern: "^[A-Z_]", argsIgnorePattern: "^_" }],
+      // D1-3 "Done when": no `any`, no `@ts-ignore`. Errors, not warnings.
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/ban-ts-comment": [
+        "error",
+        { "ts-ignore": true, "ts-nocheck": true, "ts-expect-error": true, "ts-check": false },
+      ],
+      // The no-unsafe-* rules (from strictTypeChecked) also stop `any` leaking in
+      // implicitly, e.g. from JSON.parse or response.json().
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", destructuredArrayIgnorePattern: "^_" },
+      ],
+      // Allow `() => doThing()` callbacks; still flags void used as a value elsewhere.
+      "@typescript-eslint/no-confusing-void-expression": ["error", { ignoreArrowShorthand: true }],
+      // Template literals with numbers are fine (`p-${id}`, `${count} items`).
+      "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
+    },
+  },
+
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    extends: [
+      reactHooks.configs.flat["recommended-latest"],
+      reactRefresh.configs.vite(),
+      jsxA11y.flatConfigs.recommended,
+    ],
+    languageOptions: { globals: globals.browser },
+  },
+
+  {
+    rules: {
       eqeqeq: ["error", "always"],
       "no-console": ["warn", { allow: ["warn", "error", "info", "table"] }],
     },
   },
 
-  // Node-side config files.
+  // Node-side tooling (plain JS, no type-aware linting).
   {
     files: ["*.config.js", "scripts/**/*.{js,mjs}"],
     languageOptions: { globals: globals.node },
   },
 
   prettier,
-];
+);

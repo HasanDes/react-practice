@@ -1,6 +1,11 @@
-import BugCard from "./BugCard.jsx";
+import type { Bug } from "../types.ts";
+import BugCard from "./BugCard.tsx";
 
-export default function BugList({ bugs }) {
+type BugListProps = {
+  bugs: readonly Bug[];
+};
+
+export default function BugList({ bugs }: BugListProps) {
   if (bugs.length === 0) {
     return <p>No bugs found.</p>;
   }

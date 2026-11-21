@@ -2,12 +2,32 @@
 // `window.bazaarMock` so anyone can trigger loading/error states from DevTools.
 
 import { setupWorker } from "msw/browser";
-import { ROUTE_ERRORS } from "./contract.js";
-import { createControls } from "./controls.js";
-import { createDb, DEMO_USER } from "./db.js";
-import { createHandlers } from "./handlers.js";
+import type { Product } from "../types/api.ts";
+import { ROUTE_ERRORS } from "./contract.ts";
+import { createControls, isMockRoute, type MockControls } from "./controls.ts";
+import { createDb, DEMO_USER, type MockDb } from "./db.ts";
+import { createHandlers } from "./handlers.ts";
 
-export async function startMockApi() {
+type ControlsSnapshot = ReturnType<MockControls["snapshot"]>;
+
+export type BazaarMockConsole = {
+  fail: (route: string, status: number, options?: { once?: boolean }) => ControlsSnapshot;
+  clear: (route?: string) => ControlsSnapshot;
+  latency: (ms: number, jitter?: number) => ControlsSnapshot;
+  setStock: (productId: string, stock: number) => Product | undefined;
+  reset: () => string;
+  status: () => ControlsSnapshot;
+  help: () => void;
+};
+
+declare global {
+  interface Window {
+    /** Dev/QA console controls for the mock API. Present only while mocking is on. */
+    bazaarMock?: BazaarMockConsole;
+  }
+}
+
+export async function startMockApi(): Promise<void> {
   const latencyMs = Number(import.meta.env.VITE_MOCK_LATENCY_MS ?? 300);
   const storage = window.localStorage;
 
@@ -15,11 +35,11 @@ export async function startMockApi() {
   const controls = createControls({ storage, latencyMs, jitterMs: latencyMs });
   const worker = setupWorker(...createHandlers({ db, controls }));
 
-  window.bazaarMock = createConsoleApi({ db, controls });
+  window.bazaarMock = createConsoleApi(db, controls);
 
   await worker.start({
     // Let Vite's own requests (modules, HMR, images) go straight to the network.
-    onUnhandledRequest: "bypass",
+    onUnhandledFrame: "bypass",
     quiet: !import.meta.env.DEV,
     serviceWorker: { url: `${import.meta.env.BASE_URL}mockServiceWorker.js` },
   });
@@ -31,7 +51,7 @@ export async function startMockApi() {
   );
 }
 
-function createConsoleApi({ db, controls }) {
+function createConsoleApi(db: MockDb, controls: MockControls): BazaarMockConsole {
   return {
     /** bazaarMock.fail("products:list", 500) or bazaarMock.fail("orders:create", 409, { once: true }) */
     fail: (route, status, options) => {
@@ -40,6 +60,9 @@ function createConsoleApi({ db, controls }) {
     },
     /** bazaarMock.clear() clears all forced errors; bazaarMock.clear("login") clears one. */
     clear: (route) => {
+      if (route !== undefined && !isMockRoute(route)) {
+        throw new Error(`Unknown route "${route}".`);
+      }
       controls.clear(route);
       return controls.snapshot();
     },

@@ -2,12 +2,17 @@
 // products, so ids, prices and names are stable across reloads, machines and
 // test runs. Bug reports and test assertions can refer to "p-0042" safely.
 
-import { CATEGORIES } from "../contract.js";
+import { CATEGORIES } from "../contract.ts";
+import type { Category, Cents, Product } from "../../types/api.ts";
+
+type Random = () => number;
+/** At least one element, so picking from it always yields a value. */
+type NonEmpty<T> = readonly [T, ...T[]];
 
 const SEED = 20261121;
 
 /** Small, fast seeded PRNG (mulberry32). Returns floats in [0, 1). */
-function createRandom(seed) {
+function createRandom(seed: number): Random {
   let a = seed >>> 0;
   return function random() {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -18,7 +23,10 @@ function createRandom(seed) {
   };
 }
 
-const CATALOG = {
+const CATALOG: Record<
+  Category,
+  { adjectives: NonEmpty<string>; nouns: NonEmpty<string>; priceCents: readonly [Cents, Cents] }
+> = {
   keyboards: {
     adjectives: [
       "Clicky",
@@ -85,32 +93,28 @@ const CATALOG = {
   },
 };
 
-/** @param {() => number} random @param {readonly T[]} list @template T */
-function pick(random, list) {
-  return list[Math.floor(random() * list.length)];
+function pick<T>(random: Random, list: NonEmpty<T>): T {
+  // The fallback is unreachable (index is always in range) but satisfies noUncheckedIndexedAccess.
+  return list[Math.floor(random() * list.length)] ?? list[0];
 }
 
 /** Random price in range, ending in 99 cents like a real shop. */
-function priceInRange(random, [min, max]) {
+function priceInRange(random: Random, [min, max]: readonly [Cents, Cents]): Cents {
   const dollars = Math.floor((min + random() * (max - min)) / 100);
   return dollars * 100 + 99;
 }
 
 /** ~12% sold out, ~15% low stock (1–5), the rest 6–200. */
-function stockLevel(random) {
+function stockLevel(random: Random): number {
   const roll = random();
   if (roll < 0.12) return 0;
   if (roll < 0.27) return 1 + Math.floor(random() * 5);
   return 6 + Math.floor(random() * 195);
 }
 
-/**
- * @param {number} count
- * @returns {import("../contract.js").Product[]}
- */
-export function generateProducts(count = 5000) {
+export function generateProducts(count = 5000): Product[] {
   const random = createRandom(SEED);
-  const products = [];
+  const products: Product[] = [];
 
   for (let i = 1; i <= count; i += 1) {
     const category = pick(random, CATEGORIES);

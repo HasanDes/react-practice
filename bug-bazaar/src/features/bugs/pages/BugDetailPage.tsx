@@ -1,7 +1,12 @@
 import { Link, useParams } from "react-router-dom";
+import type { Bug } from "../types.ts";
 
-export default function BugDetailPage({ bugs }) {
-  const { id } = useParams();
+type BugDetailPageProps = {
+  bugs: readonly Bug[];
+};
+
+export default function BugDetailPage({ bugs }: BugDetailPageProps) {
+  const { id } = useParams<{ id: string }>();
   // URL params are strings and bug ids are numbers.
   const bug = bugs.find((candidate) => String(candidate.id) === id);
 
@@ -9,7 +14,7 @@ export default function BugDetailPage({ bugs }) {
     return (
       <>
         <h2>Bug not found</h2>
-        <p>There is no bug with id "{id}".</p>
+        <p>There is no bug with id &quot;{id}&quot;.</p>
         <Link to="/">Back to the board</Link>
       </>
     );
