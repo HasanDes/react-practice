@@ -4,113 +4,158 @@ A small React + TypeScript store that sells developer gear: rubber ducks, mechan
 
 - **Spec:** [docs/product-spec-doc.md](docs/product-spec-doc.md)
 - **Dev → QA workflow:** [docs/workflow.md](docs/workflow.md)
-- **Decisions log:** `docs/decisions.md` (created in D1-1, then updated every task)
+- **Decisions log:** [docs/decisions.md](docs/decisions.md) (updated every task)
 
-> **Current status: pre-Day 1.** The app has been renamed from *Bug Bounty Board* to *The Bug Bazaar*, and the folder moved from `bug-bounty-starter/` to `bug-bazaar/` with Week 1 git history kept. The code is still the Week 1 JavaScript board. The TypeScript migration, mock store API and tooling arrive in Day 1. Sections marked *(planned)* will be filled in as their tasks land.
+> **Current status: Day 1, D1-1 done.** Tooling and folder structure are in place. The screens are still the Week 1 bug board (JavaScript). The mock store API (D1-2), TypeScript (D1-3) and data layer (D1-4) come next. Items marked _(planned, Dx-y)_ arrive with that task.
 
 ---
 
-## Quick start
+## Quick start (≈ 3 minutes)
 
-**Prerequisites:** Node.js 18+ (LTS 20 recommended) and npm 9+.
+**Prerequisites:** [Node.js](https://nodejs.org/) **20 or newer** (26 LTS recommended, pinned in `.nvmrc`) and the npm that ships with it. Git.
 
 ```bash
 git clone https://github.com/HasanDes/react-practice.git
 cd react-practice
 git checkout bug-bazar
 cd bug-bazaar
+
+node -v              # must print v20 or newer (see Troubleshooting if not)
 npm install
 npm run dev
 ```
 
-Open the URL Vite prints (usually http://localhost:5173).
+Open the URL Vite prints (usually http://localhost:5173). No `.env` file is needed to run the app.
+
+### Using a Node version manager
+
+The project pins Node 26 in `.nvmrc`.
+
+| Tool                                                      | Command                                                    |
+| --------------------------------------------------------- | ---------------------------------------------------------- |
+| nvm (macOS/Linux), fnm                                    | `nvm use` / `fnm use` (reads `.nvmrc`)                     |
+| [nvm-windows](https://github.com/coreybutler/nvm-windows) | `nvm install 26` then `nvm use 26` (doesn't read `.nvmrc`) |
+
+### Troubleshooting
+
+| Symptom                                                             | Cause / fix                                                                                |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `SyntaxError: Unexpected reserved word` from `vite.js` on dev/build | Node is too old (e.g. v12). Switch to Node 20+ as above, then rerun.                       |
+| `npm warn install-scripts … esbuild` during install                 | Harmless notice from npm 11. esbuild uses its prebuilt platform package. No action needed. |
+| Port 5173 already in use                                            | Vite automatically picks the next free port. Use the URL it prints.                        |
 
 ## Scripts
 
-| Script                 | What it does                               | Status        |
-| ---------------------- | ------------------------------------------ | ------------- |
-| `npm run dev`          | Start the Vite dev server with HMR         | ✅ available   |
-| `npm run build`        | Production build into `dist/`              | ✅ available   |
-| `npm run preview`      | Serve the production build locally         | ✅ available   |
-| `npm run lint`         | ESLint across `src/`                       | *(planned, D1-1)* |
-| `npm run format`       | Prettier write                             | *(planned, D1-1)* |
-| `npm run format:check` | Prettier check (used by CI)                | *(planned, D1-1)* |
-| `npm run typecheck`    | `tsc --noEmit` in strict mode              | *(planned, D1-3)* |
-| `npm run test`         | Unit and component tests                   | *(planned, D4-5)* |
+| Script                 | What it does                                                     | Status            |
+| ---------------------- | ---------------------------------------------------------------- | ----------------- |
+| `npm run dev`          | Start the Vite dev server with hot reload                        | ✅                |
+| `npm run build`        | Production build into `dist/`                                    | ✅                |
+| `npm run preview`      | Serve the production build locally                               | ✅                |
+| `npm run lint`         | ESLint: correctness, React Hooks rules, accessibility (jsx-a11y) | ✅                |
+| `npm run lint:fix`     | ESLint with auto-fix                                             | ✅                |
+| `npm run format`       | Prettier: rewrite all files to the house style                   | ✅                |
+| `npm run format:check` | Prettier: fail if anything is unformatted (for CI)               | ✅                |
+| `npm run check`        | lint + format:check + build: run before every push               | ✅                |
+| `npm run typecheck`    | `tsc --noEmit` in strict mode                                    | _(planned, D1-3)_ |
+| `npm run test`         | Unit and component tests                                         | _(planned, D4-5)_ |
 
 ## Environment variables
 
-None are required yet. Planned variables (copy `.env.example` → `.env.local` once it exists):
+**None are required today.** The app runs with built-in defaults. To override, copy the template:
 
-| Variable              | Default | Purpose |
-| --------------------- | ------- | ------- |
-| `VITE_API_BASE_URL`   | `/api`  | Base URL for the data layer (mock or real backend) |
-| `VITE_USE_MOCK_API`   | `true`  | Run against the in-browser mock API (D1-2) |
-| `VITE_MOCK_LATENCY_MS`| `300`   | Base artificial latency for the mock, used to demo loading states and race conditions |
-| `VITE_STOCK_FEED_URL` | *(mock)* | Live stock feed endpoint (D4-4) |
+```bash
+cp .env.example .env.local   # .env.local is git-ignored
+```
 
-> Only `VITE_`-prefixed variables reach the browser. Never put secrets in them.
+| Variable               | Default  | Purpose                                                                      | Used from |
+| ---------------------- | -------- | ---------------------------------------------------------------------------- | --------- |
+| `VITE_API_BASE_URL`    | `/api`   | Base URL the data layer calls (mock or real backend)                         | D1-4      |
+| `VITE_USE_MOCK_API`    | `true`   | Serve the API from the in-browser mock                                       | D1-2      |
+| `VITE_MOCK_LATENCY_MS` | `300`    | Base artificial latency for mock responses (loading states, race conditions) | D1-2      |
+| `VITE_STOCK_FEED_URL`  | _(mock)_ | Live stock feed endpoint                                                     | D4-4      |
+
+> Only `VITE_`-prefixed variables reach the browser bundle, so never put secrets in them. Restart `npm run dev` after editing env files.
+
+## Code style and editor setup
+
+- **Prettier** owns formatting (`.prettierrc.json`: 100 columns, double quotes, trailing commas, LF).
+- **ESLint** owns correctness (`eslint.config.js`). Formatting rules are disabled via `eslint-config-prettier`, so the two tools never conflict.
+- **EditorConfig** (`.editorconfig`) and **`.gitattributes`** keep indentation and LF line endings the same on every OS.
+- Recommended VS Code extensions: _ESLint_ (`dbaeumer.vscode-eslint`), _Prettier_ (`esbenp.prettier-vscode`), _EditorConfig_ (`EditorConfig.EditorConfig`). Turn on "Format on Save".
 
 ## Folder structure
 
-Current (Week 1 code):
+Organized **by feature**. Code that belongs to one feature lives together, and only truly shared pieces sit at the top level.
 
 ```
 bug-bazaar/
-├── docs/
-│   ├── product-spec-doc.md   # The Bug Bazaar spec (source of truth)
-│   └── workflow.md           # Dev → QA process for every task
+├── docs/                         # All written tasks (spec, workflow, decisions, …)
 ├── src/
-│   ├── components/           # BugCard, BugForm, BugList, LoadGate
-│   ├── pages/                # BoardPage, BugDetailPage, NotFoundPage
-│   ├── App.jsx
-│   ├── main.jsx
-│   ├── mockApi.js            # Week 1 mock (to be replaced in D1-2)
-│   └── styles.css
+│   ├── app/                      # App shell: routes, layout, app-wide pages
+│   │   ├── App.jsx
+│   │   └── NotFoundPage.jsx
+│   ├── components/               # Shared, feature-agnostic UI
+│   │   └── LoadGate.jsx
+│   ├── features/                 # One folder per feature: its pages + components
+│   │   └── bugs/                 # Week 1 board (replaced by products/ in Day 2)
+│   │       ├── components/
+│   │       └── pages/
+│   ├── mocks/                    # Fake backend (Week 1 mock; replaced by store mock in D1-2)
+│   │   └── mockApi.js
+│   ├── styles/
+│   │   └── global.css
+│   └── main.jsx                  # Entry point: providers + router
+├── .editorconfig  .gitattributes  .nvmrc
+├── .env.example                  # Env template (copy to .env.local)
+├── .prettierrc.json  .prettierignore
+├── eslint.config.js
 ├── index.html
 ├── package.json
 └── vite.config.js
 ```
 
-Target layout *(planned, finalized in D1-1 and documented in `docs/ARCHITECTURE.md`)*:
+Folders added by later tasks _(planned)_:
 
-```
-src/
-├── api/          # Single data layer: client, endpoints, error normalization (D1-4)
-├── mocks/        # Mock API, 5,000-product seed, error triggers (D1-2)
-├── types/        # Shared contract types: Product, ApiError, RequestState (D1-3)
-├── store/        # Redux Toolkit: cart + session slices, selectors (D3-1)
-├── hooks/        # Reusable typed hooks: useDebounce, useLocalStorage, … (D2-5)
-├── features/     # products/, cart/, auth/, orders/ — pages + feature components
-├── components/   # Shared presentational UI: StateView, Price, ErrorBoundary
-└── utils/        # formatPrice (cents → display), query-param helpers
-```
+| Folder                                            | Purpose                                                            | Task  |
+| ------------------------------------------------- | ------------------------------------------------------------------ | ----- |
+| `src/api/`                                        | Single data layer: HTTP client, endpoints, error normalization     | D1-4  |
+| `src/types/`                                      | Shared contract types: `Product`, `ApiError`, request status       | D1-3  |
+| `src/hooks/`                                      | Reusable typed hooks (`useDebounce`, `useLocalStorage`, …)         | D2-5  |
+| `src/store/`                                      | Redux Toolkit: cart and session slices, selectors                  | D3-1  |
+| `src/utils/`                                      | Pure helpers: `formatPrice` (cents → display), query-param parsing | D2-1  |
+| `src/features/products`, `cart`, `auth`, `orders` | Store features                                                     | D2–D3 |
+
+**Rules of thumb**
+
+1. A file used by one feature lives in that feature's folder. Move it to `components/` only when a second feature needs it.
+2. Components never talk to the network. They go through `src/api/` (enforced from D1-4).
+3. File names: `PascalCase.jsx` for components, `camelCase.js` for everything else.
 
 ## API contract
 
 The app builds against the shared contract in the spec. Prices are integers in **cents**.
 
-| Method | Endpoint | Success | Errors |
-| ------ | -------- | ------- | ------ |
-| GET  | `/api/products?search=&category=&sort=&page=` | `200 { items, total }` | 500 |
-| GET  | `/api/products/:id` | `200 Product` | 404 |
-| POST | `/api/login` | `200 { token, user }` | 400, 401 |
-| GET  | `/api/me` | `200 user` | 401 |
-| POST | `/api/orders` | `201 { id, status: "queued" }` | 400, 401, 409 |
-| GET  | `/api/orders/:id` | `200 { id, status }` | 401, 404 |
+| Method | Endpoint                                      | Success                        | Errors        |
+| ------ | --------------------------------------------- | ------------------------------ | ------------- |
+| GET    | `/api/products?search=&category=&sort=&page=` | `200 { items, total }`         | 500           |
+| GET    | `/api/products/:id`                           | `200 Product`                  | 404           |
+| POST   | `/api/login`                                  | `200 { token, user }`          | 400, 401      |
+| GET    | `/api/me`                                     | `200 user`                     | 401           |
+| POST   | `/api/orders`                                 | `201 { id, status: "queued" }` | 400, 401, 409 |
+| GET    | `/api/orders/:id`                             | `200 { id, status }`           | 401, 404      |
 
 Full details, including how to trigger each error on purpose, will live in `docs/api-contract.md` (D1-2).
 
 ## Week plan and progress
 
-| Day | Theme      | Tasks | Pts | Status |
-| --- | ---------- | ----- | --- | ------ |
-| 0   | Rename     | Rename to The Bug Bazaar, keep history | — | ✅ |
-| 1   | Foundation | D1-1 Setup · D1-2 API contract + mock · D1-3 TypeScript · D1-4 Data layer | 15 | ⬜ |
-| 2   | Browse     | D2-1 Product list · D2-2 Filters · D2-3 UI states · D2-4 Effects cleanup · D2-5 Custom hooks · D2-6 Race conditions | 21 | ⬜ |
-| 3   | Buy        | D3-1 Redux Toolkit · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching | 21 | ⬜ |
-| 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring | 22 | ⬜ |
-| 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission | 21 | ⬜ |
+| Day | Theme      | Tasks                                                                                                                | Pts | Status |
+| --- | ---------- | -------------------------------------------------------------------------------------------------------------------- | --- | ------ |
+| 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                               | —   | ✅     |
+| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock · D1-3 TypeScript · D1-4 Data layer                                         | 15  | 🟡     |
+| 2   | Browse     | D2-1 Product list · D2-2 Filters · D2-3 UI states · D2-4 Effects cleanup · D2-5 Custom hooks · D2-6 Race conditions  | 21  | ⬜     |
+| 3   | Buy        | D3-1 Redux Toolkit · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching                                      | 21  | ⬜     |
+| 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring | 22  | ⬜     |
+| 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission                        | 21  | ⬜     |
 
 Days 1 to 3 produce the working store and come first if time runs short.
 
@@ -127,17 +172,17 @@ Follow [docs/workflow.md](docs/workflow.md). In short:
 
 ## Docs index
 
-| Doc | Purpose |
-| --- | ------- |
-| [docs/product-spec-doc.md](docs/product-spec-doc.md) | Full project spec |
-| [docs/workflow.md](docs/workflow.md) | Development → QA process |
-| `docs/decisions.md` | Tool and approach choices per task |
-| `docs/api-contract.md` | API contract and mock error triggers (D1-2) |
-| `docs/auth.md` | Token storage and trade-offs (D3-3) |
-| `docs/performance.md` | Before/after measurements (D4-2, D4-3) |
-| `docs/monitoring.md` | Error logging and what to track (D4-7) |
-| `docs/ARCHITECTURE.md` | Structure, data flow, state, patterns (D5-1, D5-2) |
-| `docs/orders.md` | Queue-based order flow design (D5-3) |
-| `docs/glossary.md` | Architecture vocabulary (D5-4) |
-| `docs/ai-notes.md` | AI usage log (D5-7) |
-| `docs/reflection.md` | Self-assessment (D5-8) |
+| Doc                                                  | Purpose                                            |
+| ---------------------------------------------------- | -------------------------------------------------- |
+| [docs/product-spec-doc.md](docs/product-spec-doc.md) | Full project spec                                  |
+| [docs/workflow.md](docs/workflow.md)                 | Development → QA process                           |
+| [docs/decisions.md](docs/decisions.md)               | Tool and approach choices per task                 |
+| `docs/api-contract.md`                               | API contract and mock error triggers (D1-2)        |
+| `docs/auth.md`                                       | Token storage and trade-offs (D3-3)                |
+| `docs/performance.md`                                | Before/after measurements (D4-2, D4-3)             |
+| `docs/monitoring.md`                                 | Error logging and what to track (D4-7)             |
+| `docs/ARCHITECTURE.md`                               | Structure, data flow, state, patterns (D5-1, D5-2) |
+| `docs/orders.md`                                     | Queue-based order flow design (D5-3)               |
+| `docs/glossary.md`                                   | Architecture vocabulary (D5-4)                     |
+| `docs/ai-notes.md`                                   | AI usage log (D5-7)                                |
+| `docs/reflection.md`                                 | Self-assessment (D5-8)                             |
