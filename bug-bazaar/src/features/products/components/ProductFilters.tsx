@@ -15,9 +15,19 @@ type ProductFiltersProps = {
   filters: Filters;
   onFiltersChange: (changes: Partial<Filters>) => void;
   onClear: () => void;
+  /**
+   * True while the typed search differs from the results on screen (waiting
+   * for the debounce). Lets the page mark its results as outdated (D2-6).
+   */
+  onSearchPendingChange?: (pending: boolean) => void;
 };
 
-export default function ProductFilters({ filters, onFiltersChange, onClear }: ProductFiltersProps) {
+export default function ProductFilters({
+  filters,
+  onFiltersChange,
+  onClear,
+  onSearchPendingChange,
+}: ProductFiltersProps) {
   const id = useId();
 
   // The input needs its own draft so typing stays instant while the URL only
@@ -35,12 +45,14 @@ export default function ProductFilters({ filters, onFiltersChange, onClear }: Pr
 
   const commitSearch = useDebouncedCallback((value: string) => {
     onFiltersChange({ search: value.trim() });
+    onSearchPendingChange?.(false);
   }, SEARCH_DEBOUNCE_MS);
 
   // A URL change from elsewhere wins over a half-typed search still waiting to commit.
   useEffect(() => {
     commitSearch.cancel();
-  }, [filters.search, commitSearch]);
+    onSearchPendingChange?.(false);
+  }, [filters.search, commitSearch, onSearchPendingChange]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,6 +61,7 @@ export default function ProductFilters({ filters, onFiltersChange, onClear }: Pr
 
   function handleClear() {
     commitSearch.cancel();
+    onSearchPendingChange?.(false);
     setDraft("");
     onClear();
   }
@@ -63,8 +76,10 @@ export default function ProductFilters({ filters, onFiltersChange, onClear }: Pr
           placeholder="Ducks, keyboards, coffee…"
           value={draft}
           onChange={(event) => {
-            setDraft(event.target.value);
-            commitSearch.call(event.target.value);
+            const value = event.target.value;
+            setDraft(value);
+            commitSearch.call(value);
+            onSearchPendingChange?.(value.trim() !== filters.search);
           }}
           autoComplete="off"
         />

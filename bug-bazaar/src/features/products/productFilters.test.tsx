@@ -79,7 +79,7 @@ describe("a copied link reproduces the same view", () => {
     const { items, total } = expected(query);
 
     expect(
-      await screen.findByText(`${total.toLocaleString("en-US")} products match your filters`),
+      await screen.findByText(`${total.toLocaleString("en-US")} products for “duck”`),
     ).toBeInTheDocument();
     expect(searchBox().value).toBe("duck");
     expect(categorySelect().value).toBe("ducks");
@@ -183,7 +183,7 @@ describe("filters survive a refresh", () => {
 describe("clearing filters", () => {
   it("resets the URL, every control and the result count", async () => {
     const { user } = renderAt("/?search=duck&inStock=true&sort=name-asc");
-    await screen.findByText(/match your filters/);
+    await screen.findByText(/products for “duck”/);
 
     await user.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(currentUrl()).toBe("");

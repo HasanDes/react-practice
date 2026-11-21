@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getProducts } from "../../../api/index.ts";
 import BackToTop from "../../../components/BackToTop.tsx";
@@ -12,6 +12,7 @@ import ProductGrid from "../components/ProductGrid.tsx";
 import {
   hasActiveFilters,
   parseFilters,
+  resultSummary,
   toProductQuery,
   toSearchParams,
   type ProductFilters as Filters,
@@ -32,10 +33,16 @@ export default function ProductsPage() {
     getProducts(toProductQuery(filters, PAGE_SIZE), { signal }),
   );
   const headingRef = useRef<HTMLHeadingElement>(null);
+  // A typed search is waiting to apply: what's on screen is for an older query.
+  const [searchPending, setSearchPending] = useState(false);
 
   /** Push a new URL. Changing any filter starts again at page 1. */
   function updateFilters(changes: Partial<Filters>) {
-    setSearchParams(toSearchParams({ ...filters, page: 1, ...changes }));
+    const next = toSearchParams({ ...filters, page: 1, ...changes });
+    // e.g. typing "duck" then deleting back to the current search: no change,
+    // so no duplicate history entry and no refetch.
+    if (next.toString() === queryKey) return;
+    setSearchParams(next);
   }
 
   function clearFilters() {
@@ -57,70 +64,80 @@ export default function ProductsPage() {
         Products
       </h2>
 
-      <ProductFilters filters={filters} onFiltersChange={updateFilters} onClear={clearFilters} />
+      <ProductFilters
+        filters={filters}
+        onFiltersChange={updateFilters}
+        onClear={clearFilters}
+        onSearchPendingChange={setSearchPending}
+      />
 
       {/* Live region: screen readers hear the new count after each filter change. */}
       <p className="result-count" role="status">
-        {products.status === "success" ? resultSummary(products.data.total, filtered) : ""}
+        {searchPending
+          ? "Searching…"
+          : products.status === "success"
+            ? resultSummary(products.data.total, filters.search, filtered)
+            : ""}
       </p>
 
-      <LoadGate
-        state={products}
-        onRetry={retry}
-        subject="products"
-        loading={<LoadingState label="Loading products…" variant="grid" />}
-        isEmpty={({ total }) => total === 0}
-        empty={
-          filtered ? (
-            <EmptyState
-              title="No products match your filters"
-              description="Try a different search, or clear the filters to see everything."
-              action={
-                <button type="button" className="button button--primary" onClick={clearFilters}>
-                  Clear filters
-                </button>
-              }
-            />
-          ) : (
-            <EmptyState icon="📦" title="No products yet" description="Check back soon." />
-          )
-        }
+      {/* Dimmed while a typed search is pending: never present old results as current. */}
+      <div
+        className={searchPending ? "results results--stale" : "results"}
+        aria-busy={searchPending}
       >
-        {({ items, total }) => {
-          const totalPages = Math.ceil(total / PAGE_SIZE);
-          if (items.length === 0) {
-            // e.g. a stale link to page 40 of a search that now has 3 pages
-            return (
+        <LoadGate
+          state={products}
+          onRetry={retry}
+          subject="products"
+          loading={<LoadingState label="Loading products…" variant="grid" />}
+          isEmpty={({ total }) => total === 0}
+          empty={
+            filtered ? (
               <EmptyState
-                icon="📄"
-                title="That page doesn't exist"
-                description={`These results only have ${String(totalPages)} ${totalPages === 1 ? "page" : "pages"}.`}
+                title="No products match your filters"
+                description="Try a different search, or clear the filters to see everything."
                 action={
-                  <button
-                    type="button"
-                    className="button button--primary"
-                    onClick={() => goToPage(1)}
-                  >
-                    Go to page 1
+                  <button type="button" className="button button--primary" onClick={clearFilters}>
+                    Clear filters
                   </button>
                 }
               />
-            );
+            ) : (
+              <EmptyState icon="📦" title="No products yet" description="Check back soon." />
+            )
           }
-          return (
-            <>
-              <ProductGrid products={items} listSearch={searchParams.toString()} />
-              <Pagination page={filters.page} totalPages={totalPages} onPageChange={goToPage} />
-            </>
-          );
-        }}
-      </LoadGate>
+        >
+          {({ items, total }) => {
+            const totalPages = Math.ceil(total / PAGE_SIZE);
+            if (items.length === 0) {
+              // e.g. a stale link to page 40 of a search that now has 3 pages
+              return (
+                <EmptyState
+                  icon="📄"
+                  title="That page doesn't exist"
+                  description={`These results only have ${String(totalPages)} ${totalPages === 1 ? "page" : "pages"}.`}
+                  action={
+                    <button
+                      type="button"
+                      className="button button--primary"
+                      onClick={() => goToPage(1)}
+                    >
+                      Go to page 1
+                    </button>
+                  }
+                />
+              );
+            }
+            return (
+              <>
+                <ProductGrid products={items} listSearch={searchParams.toString()} />
+                <Pagination page={filters.page} totalPages={totalPages} onPageChange={goToPage} />
+              </>
+            );
+          }}
+        </LoadGate>
+      </div>
       <BackToTop />
     </section>
   );
-}
-
-function resultSummary(total: number, filtered: boolean): string {
-  const count = `${total.toLocaleString("en-US")} ${total === 1 ? "product" : "products"}`;
-  return filtered ? `${count} match your filters` : count;
 }

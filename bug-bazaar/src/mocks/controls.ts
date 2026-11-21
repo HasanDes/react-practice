@@ -12,8 +12,22 @@ type Failure = { status: MockFailure; once: boolean };
 type ControlsState = {
   latencyMs: number;
   jitterMs: number;
+  /** Race mode (D2-6): extra delay per missing search character. 0 = off. */
+  raceStepMs: number;
   failures: Partial<Record<MockRoute, Failure>>;
 };
+
+/** Searches of this length or longer get no race-mode penalty. */
+export const RACE_FULL_LENGTH = 6;
+
+/**
+ * Race mode: shorter searches answer *slower*. Typing "d", "du", "duc",
+ * "duck" therefore produces responses in reverse order. That's the worst
+ * case for search, and it's deterministic, so it can be demoed and tested.
+ */
+export function raceDelay(search: string, stepMs: number): number {
+  return stepMs * Math.max(0, RACE_FULL_LENGTH - search.trim().length);
+}
 
 export type ControlsOptions = {
   storage: Pick<StorageLike, "getItem" | "setItem">;
@@ -38,7 +52,7 @@ export function createControls({
   jitterMs = 0,
   random = Math.random,
 }: ControlsOptions) {
-  const defaults: ControlsState = { latencyMs, jitterMs, failures: {} };
+  const defaults: ControlsState = { latencyMs, jitterMs, raceStepMs: 0, failures: {} };
   const state = load();
 
   function load(): ControlsState {
@@ -76,8 +90,19 @@ export function createControls({
      * Base latency plus random jitter. Jitter makes responses finish out of
      * order, which is what D2-6 (race conditions) needs to demonstrate.
      */
-    nextDelay(): number {
-      return state.latencyMs + Math.round(random() * state.jitterMs);
+    nextDelay(context?: { route: MockRoute; search: string }): number {
+      const base = state.latencyMs + Math.round(random() * state.jitterMs);
+      const race =
+        context?.route === "products:list" && state.raceStepMs > 0
+          ? raceDelay(context.search, state.raceStepMs)
+          : 0;
+      return base + race;
+    },
+
+    /** Turn race mode on (step per missing character, e.g. 400) or off (0). */
+    setRace(stepMs: number): void {
+      state.raceStepMs = Math.max(0, stepMs);
+      save();
     },
 
     setLatency(ms: number, jitter: number = ms): void {

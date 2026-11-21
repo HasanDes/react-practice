@@ -136,7 +136,8 @@ export function createHandlers({ db, controls }: { db: MockDb; controls: MockCon
    * Returns a Response to short-circuit, or null to continue.
    */
   async function simulate(route: MockRoute, request: Request, context?: ForcedContext) {
-    const ms = controls.nextDelay();
+    const search = new URL(request.url).searchParams.get("search") ?? "";
+    const ms = controls.nextDelay({ route, search });
     if (ms > 0) await delay(ms);
 
     const status = requestedError(request) ?? controls.takeFailure(route);

@@ -101,3 +101,10 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   coffee: "Coffee",
   stickers: "Stickers",
 };
+
+/** Names the query the results belong to, so it's always clear what you're looking at. */
+export function resultSummary(total: number, search: string, filtered: boolean): string {
+  const count = `${total.toLocaleString("en-US")} ${total === 1 ? "product" : "products"}`;
+  if (search) return `${count} for “${search}”`;
+  return filtered ? `${count} match your filters` : count;
+}

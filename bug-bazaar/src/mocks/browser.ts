@@ -18,6 +18,7 @@ export type BazaarMockConsole = {
   ) => ControlsSnapshot;
   clear: (route?: string) => ControlsSnapshot;
   latency: (ms: number, jitter?: number) => ControlsSnapshot;
+  race: (stepMs?: number) => ControlsSnapshot;
   setStock: (productId: string, stock: number) => Product | undefined;
   reset: () => string;
   status: () => ControlsSnapshot;
@@ -75,6 +76,11 @@ function createConsoleApi(db: MockDb, controls: MockControls): BazaarMockConsole
       controls.setLatency(ms, jitter);
       return controls.snapshot();
     },
+    /** bazaarMock.race() → older (shorter) searches answer slower; race(0) → off. */
+    race: (stepMs = 400) => {
+      controls.setRace(stepMs);
+      return controls.snapshot();
+    },
     /** bazaarMock.setStock("p-0001", 0) to test sold-out and 409 flows. */
     setStock: (productId, stock) => {
       db.setStock(productId, stock);
@@ -100,6 +106,7 @@ function createConsoleApi(db: MockDb, controls: MockControls): BazaarMockConsole
           'bazaarMock.fail(route, status, { once })  force an error (status or "network")',
           "bazaarMock.clear(route?)                   stop forcing errors",
           "bazaarMock.latency(ms, jitter?)            slow responses (jitter reorders them)",
+          "bazaarMock.race(stepMs?) / race(0)         out-of-order search responses (D2-6)",
           "bazaarMock.setStock(productId, n)          change stock",
           "bazaarMock.reset()                         wipe orders/sessions/stock changes",
           "bazaarMock.status()                        show current controls",

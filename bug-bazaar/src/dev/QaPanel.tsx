@@ -35,6 +35,7 @@ export default function QaPanel() {
         QA: trigger states
         {status.latencyMs >= SLOW_MS ? " · slow" : ""}
         {activeErrors.length > 0 ? " · errors on" : ""}
+        {status.raceStepMs > 0 ? " · race" : ""}
       </summary>
       <p className="qa-panel__hint">
         This page calls <code>{route}</code>.
@@ -77,6 +78,17 @@ export default function QaPanel() {
         >
           Stop errors (then press Try again)
         </button>
+        <button
+          type="button"
+          aria-pressed={status.raceStepMs > 0}
+          onClick={() => {
+            // Shorter (older) searches answer slower, so responses arrive out of order (D2-6).
+            mock.race(status.raceStepMs > 0 ? 0 : 400);
+            setVersion((version) => version + 1);
+          }}
+        >
+          Race mode: {status.raceStepMs > 0 ? "on" : "off"} (out-of-order search)
+        </button>
         <button type="button" onClick={() => navigate("/?search=no-such-product")}>
           Empty results
         </button>
@@ -87,6 +99,7 @@ export default function QaPanel() {
           type="button"
           onClick={() => {
             mock.clear();
+            mock.race(0);
             mock.latency(Number(import.meta.env.VITE_MOCK_LATENCY_MS ?? 300));
             reload();
           }}

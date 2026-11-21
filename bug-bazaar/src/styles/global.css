@@ -530,3 +530,17 @@ main:focus {
   margin: 0 0 1rem;
   font-size: 1.25rem;
 }
+
+/* ---- Pending search (D2-6) -------------------------------------------------- */
+
+/* Results on screen belong to an older query while a typed search waits to apply. */
+.results--stale {
+  opacity: 0.45;
+  transition: opacity 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .results--stale {
+    transition: none;
+  }
+}
