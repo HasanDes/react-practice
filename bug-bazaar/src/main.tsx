@@ -4,12 +4,25 @@ import { Provider } from "react-redux";
 import { BrowserRouter } from "react-router-dom";
 import { apiWebSocketUrl } from "./api/index.ts";
 import App from "./app/App.tsx";
+import AppCrashed from "./app/AppCrashed.tsx";
+import ErrorBoundary from "./components/ErrorBoundary.tsx";
+import { crashTest } from "./dev/crashTest.ts";
 import { loadSession, persistSession, verifySession } from "./features/auth/sessionStorage.ts";
 import { loadCart, persistCart } from "./features/cart/cartStorage.ts";
 import { LiveStockContext, startLiveStock } from "./features/stock/liveStock.tsx";
 import { connectApiToStore } from "./store/connectApi.ts";
 import { makeStore } from "./store/store.ts";
+import { exposeMonitoringConsole } from "./monitoring/console.ts";
+import { installGlobalErrorHandlers } from "./monitoring/globalHandlers.ts";
+import { monitor } from "./monitoring/monitor.ts";
 import "./styles/global.css";
+
+// D4-7: log errors from the very start, before anything else can throw.
+// Render errors are caught by the error boundaries below; these handlers
+// catch the rest (event handlers, timers, unhandled promise rejections).
+installGlobalErrorHandlers(monitor);
+const mockEnabled = import.meta.env.VITE_USE_MOCK_API !== "false";
+exposeMonitoringConsole(monitor, mockEnabled ? { crashPage: crashTest.arm } : {});
 
 /**
  * Start the mock backend before the first render, so the app's very first
@@ -48,14 +61,19 @@ function renderApp(): void {
 
   ReactDOM.createRoot(container).render(
     <React.StrictMode>
-      <Provider store={store}>
-        <LiveStockContext.Provider value={liveStock.registry}>
-          {/* basename: the app can be served from a subfolder (D4-6 deploy). */}
-          <BrowserRouter basename={import.meta.env.BASE_URL}>
-            <App />
-          </BrowserRouter>
-        </LiveStockContext.Provider>
-      </Provider>
+      {/* Last resort (D4-7): anything outside a page that throws (header,
+          providers) shows a reload screen instead of a blank page. Pages
+          have their own boundary inside App, which keeps the header. */}
+      <ErrorBoundary fallback={(props) => <AppCrashed {...props} />}>
+        <Provider store={store}>
+          <LiveStockContext.Provider value={liveStock.registry}>
+            {/* basename: the app can be served from a subfolder (D4-6 deploy). */}
+            <BrowserRouter basename={import.meta.env.BASE_URL}>
+              <App />
+            </BrowserRouter>
+          </LiveStockContext.Provider>
+        </Provider>
+      </ErrorBoundary>
     </React.StrictMode>,
   );
 }

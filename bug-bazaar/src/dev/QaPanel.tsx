@@ -10,6 +10,7 @@
 
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { crashTest } from "./crashTest.ts";
 
 const SLOW_MS = 4000;
 
@@ -115,6 +116,28 @@ export default function QaPanel() {
         </button>
         <button type="button" onClick={() => mock.liveStock.outage(15_000)}>
           Live stock outage (15 s)
+        </button>
+        {/* Monitoring (D4-7). A render error shows the fallback screen; the
+            other two can't break rendering, so they're only logged. Check
+            the log with bazaarMonitoring.reports() in the console. */}
+        <button type="button" onClick={crashTest.arm}>
+          Crash this page (render error)
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            throw new Error("QA: thrown on purpose in a click handler (D4-7)");
+          }}
+        >
+          Throw in a click handler
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void Promise.reject(new Error("QA: a promise rejected on purpose (D4-7)"));
+          }}
+        >
+          Unhandled promise rejection
         </button>
         <button
           type="button"
