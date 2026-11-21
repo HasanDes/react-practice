@@ -10,7 +10,7 @@ import jsxA11y from "eslint-plugin-jsx-a11y";
 import prettier from "eslint-config-prettier";
 
 export default [
-  { ignores: ["dist", "coverage", "node_modules"] },
+  { ignores: ["dist", "coverage", "node_modules", "public/mockServiceWorker.js"] },
 
   js.configs.recommended,
   reactHooks.configs.flat["recommended-latest"],
