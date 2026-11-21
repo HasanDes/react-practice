@@ -1,12 +1,12 @@
 # The Bug Bazaar 🦆⌨️☕
 
-A small React + TypeScript store that sells developer gear: rubber ducks, mechanical keyboards, coffee and stickers. It evolves the Week 1 **Bug Bounty Board** into a full browse → cart → checkout experience over one week, against a mocked shared API.
+A small React + TypeScript (strict) store that sells developer gear: rubber ducks, mechanical keyboards, coffee and stickers. It evolves the Week 1 **Bug Bounty Board** into a full browse → cart → checkout experience over one week, against a mocked shared API.
 
 - **Spec:** [docs/product-spec-doc.md](docs/product-spec-doc.md)
 - **Dev → QA workflow:** [docs/workflow.md](docs/workflow.md)
 - **Decisions log:** [docs/decisions.md](docs/decisions.md) (updated every task)
 
-> **Current status: Day 1, D1-1 and D1-2 done.** Tooling, folder structure and the **mock store API** (5,000 products, auth, orders, triggerable errors) are in place. The screens are still the Week 1 bug board (JavaScript). TypeScript (D1-3) and the data layer (D1-4) come next. Items marked _(planned, Dx-y)_ arrive with that task.
+> **Current status: Day 1, D1-1 to D1-3 done.** Tooling, folder structure, the **mock store API** and a **strict TypeScript** codebase (no `any`, no `@ts-ignore`, enforced by lint) are in place. The screens are still the Week 1 bug board. The data layer (D1-4) comes next. Items marked _(planned, Dx-y)_ arrive with that task.
 
 ---
 
@@ -38,29 +38,29 @@ The project pins Node 26 in `.nvmrc`.
 
 ### Troubleshooting
 
-| Symptom                                                             | Cause / fix                                                                                                                                     |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SyntaxError: Unexpected reserved word` from `vite.js` on dev/build | Node is too old (e.g. v12). Switch to Node 22.12+ as above, then rerun.                                                                         |
-| `npm warn install-scripts … esbuild` during install                 | Harmless notice from npm 11. esbuild uses its prebuilt platform package. No action needed.                                                      |
-| `Vitest failed to find the runner`                                  | Run tests with `npm test`, not `npx vitest`. The npm script fixes a lowercase Windows drive letter (`d:` vs `D:`) that otherwise breaks Vitest. |
-| App shows stale mock behavior after changes                         | DevTools → Application → Service Workers → _Unregister_, then reload. Or run `bazaarMock.reset()` in the console.                               |
-| Port 5173 already in use                                            | Vite automatically picks the next free port. Use the URL it prints.                                                                             |
+| Symptom                                                                                       | Cause / fix                                                                                                                                     |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SyntaxError: Unexpected reserved word` or `Unexpected token '.'` from `vite.js` on dev/build | Node is too old (e.g. v12). Switch to Node 22.12+ as above, then rerun.                                                                         |
+| `npm warn install-scripts … esbuild` during install                                           | Harmless notice from npm 11. esbuild uses its prebuilt platform package. No action needed.                                                      |
+| `Vitest failed to find the runner`                                                            | Run tests with `npm test`, not `npx vitest`. The npm script fixes a lowercase Windows drive letter (`d:` vs `D:`) that otherwise breaks Vitest. |
+| App shows stale mock behavior after changes                                                   | DevTools → Application → Service Workers → _Unregister_, then reload. Or run `bazaarMock.reset()` in the console.                               |
+| Port 5173 already in use                                                                      | Vite automatically picks the next free port. Use the URL it prints.                                                                             |
 
 ## Scripts
 
-| Script                 | What it does                                                     | Status            |
-| ---------------------- | ---------------------------------------------------------------- | ----------------- |
-| `npm run dev`          | Start the Vite dev server with hot reload                        | ✅                |
-| `npm run build`        | Production build into `dist/`                                    | ✅                |
-| `npm run preview`      | Serve the production build locally                               | ✅                |
-| `npm run lint`         | ESLint: correctness, React Hooks rules, accessibility (jsx-a11y) | ✅                |
-| `npm run lint:fix`     | ESLint with auto-fix                                             | ✅                |
-| `npm run format`       | Prettier: rewrite all files to the house style                   | ✅                |
-| `npm run format:check` | Prettier: fail if anything is unformatted (for CI)               | ✅                |
-| `npm run test`         | Run all tests once (Vitest). Includes the API contract tests     | ✅                |
-| `npm run test:watch`   | Vitest in watch mode                                             | ✅                |
-| `npm run check`        | lint + format:check + test + build: run before every push        | ✅                |
-| `npm run typecheck`    | `tsc --noEmit` in strict mode                                    | _(planned, D1-3)_ |
+| Script                 | What it does                                                           | Status |
+| ---------------------- | ---------------------------------------------------------------------- | ------ |
+| `npm run dev`          | Start the Vite dev server with hot reload                              | ✅     |
+| `npm run build`        | Type-check, then production build into `dist/`                         | ✅     |
+| `npm run preview`      | Serve the production build locally                                     | ✅     |
+| `npm run lint`         | ESLint: correctness, React Hooks rules, accessibility (jsx-a11y)       | ✅     |
+| `npm run lint:fix`     | ESLint with auto-fix                                                   | ✅     |
+| `npm run format`       | Prettier: rewrite all files to the house style                         | ✅     |
+| `npm run format:check` | Prettier: fail if anything is unformatted (for CI)                     | ✅     |
+| `npm run test`         | Run all tests once (Vitest). Includes the API contract tests           | ✅     |
+| `npm run test:watch`   | Vitest in watch mode                                                   | ✅     |
+| `npm run check`        | lint + format:check + typecheck + test + build: run before every push  | ✅     |
+| `npm run typecheck`    | `tsc -b`: strict type check of app, tests and config (no output files) | ✅     |
 
 ## Environment variables
 
@@ -82,7 +82,8 @@ cp .env.example .env.local   # .env.local is git-ignored
 ## Code style and editor setup
 
 - **Prettier** owns formatting (`.prettierrc.json`: 100 columns, double quotes, trailing commas, LF).
-- **ESLint** owns correctness (`eslint.config.js`). Formatting rules are disabled via `eslint-config-prettier`, so the two tools never conflict.
+- **TypeScript** in strict mode (`tsconfig.app.json`, `tsconfig.node.json`). `npm run typecheck` must pass.
+- **ESLint** owns correctness (`eslint.config.js`), including type-aware `typescript-eslint` rules that ban `any` (explicit or leaked from `JSON.parse` and similar) and `@ts-ignore`. Formatting rules are disabled via `eslint-config-prettier`, so the two tools never conflict.
 - **EditorConfig** (`.editorconfig`) and **`.gitattributes`** keep indentation and LF line endings the same on every OS.
 - Recommended VS Code extensions: _ESLint_ (`dbaeumer.vscode-eslint`), _Prettier_ (`esbenp.prettier-vscode`), _EditorConfig_ (`EditorConfig.EditorConfig`). Turn on "Format on Save".
 
@@ -95,27 +96,32 @@ bug-bazaar/
 ├── docs/                         # All written tasks (spec, workflow, decisions, …)
 ├── src/
 │   ├── app/                      # App shell: routes, layout, app-wide pages
-│   │   ├── App.jsx
-│   │   └── NotFoundPage.jsx
+│   │   ├── App.tsx
+│   │   └── NotFoundPage.tsx
 │   ├── components/               # Shared, feature-agnostic UI
-│   │   └── LoadGate.jsx
+│   │   └── LoadGate.tsx          # Renders loading/error/success from a RequestState
 │   ├── features/                 # One folder per feature: its pages + components
 │   │   └── bugs/                 # Week 1 board (replaced by products/ in Day 2)
 │   │       ├── components/
-│   │       └── pages/
+│   │       ├── pages/
+│   │       └── types.ts
 │   ├── mocks/                    # Mock backend (MSW). See docs/api-contract.md
-│   │   ├── data/seed.js          # Deterministic 5,000-product generator
-│   │   ├── contract.js           # Contract constants + allowed errors per route
-│   │   ├── queryProducts.js      # Search / filter / sort / paginate
-│   │   ├── db.js                 # Mock state (stock, sessions, orders), persisted
-│   │   ├── controls.js           # Latency + forced-error switches
-│   │   ├── handlers.js           # The HTTP endpoints
-│   │   ├── handlers.test.js      # Contract tests
-│   │   ├── browser.js            # Starts the Service Worker, exposes bazaarMock
-│   │   └── mockApi.js            # Week 1 bug mock (removed when the board is replaced)
+│   │   ├── data/seed.ts          # Deterministic 5,000-product generator
+│   │   ├── contract.ts           # Contract constants + allowed errors per route
+│   │   ├── queryProducts.ts      # Search / filter / sort / paginate
+│   │   ├── db.ts                 # Mock state (stock, sessions, orders), persisted
+│   │   ├── controls.ts           # Latency + forced-error switches
+│   │   ├── handlers.ts           # The HTTP endpoints
+│   │   ├── handlers.test.ts      # Contract tests
+│   │   ├── browser.ts            # Starts the Service Worker, exposes bazaarMock
+│   │   └── mockApi.ts            # Week 1 bug mock (removed when the board is replaced)
 │   ├── styles/
 │   │   └── global.css
-│   └── main.jsx                  # Entry point: providers + router
+│   ├── vite-env.d.ts             # Typed import.meta.env
+│   ├── types/
+│   │   ├── api.ts                # Shared contract types (single source of truth)
+│   │   └── request.ts            # RequestState discriminated union
+│   ├── main.tsx                  # Entry point: providers + router
 ├── public/
 │   ├── images/products/          # Category images used by product imageUrl
 │   └── mockServiceWorker.js      # Generated by MSW. Don't edit
@@ -124,9 +130,11 @@ bug-bazaar/
 ├── .env.example                  # Env template (copy to .env.local)
 ├── .prettierrc.json  .prettierignore
 ├── eslint.config.js
+├── tsconfig.json                 # References app + node configs
+├── tsconfig.app.json  tsconfig.node.json
 ├── index.html
 ├── package.json
-└── vite.config.js
+└── vite.config.ts
 ```
 
 Folders added by later tasks _(planned)_:
@@ -134,7 +142,6 @@ Folders added by later tasks _(planned)_:
 | Folder                                            | Purpose                                                            | Task  |
 | ------------------------------------------------- | ------------------------------------------------------------------ | ----- |
 | `src/api/`                                        | Single data layer: HTTP client, endpoints, error normalization     | D1-4  |
-| `src/types/`                                      | Shared contract types: `Product`, `ApiError`, request status       | D1-3  |
 | `src/hooks/`                                      | Reusable typed hooks (`useDebounce`, `useLocalStorage`, …)         | D2-5  |
 | `src/store/`                                      | Redux Toolkit: cart and session slices, selectors                  | D3-1  |
 | `src/utils/`                                      | Pure helpers: `formatPrice` (cents → display), query-param parsing | D2-1  |
@@ -144,7 +151,8 @@ Folders added by later tasks _(planned)_:
 
 1. A file used by one feature lives in that feature's folder. Move it to `components/` only when a second feature needs it.
 2. Components never talk to the network. They go through `src/api/` (enforced from D1-4).
-3. File names: `PascalCase.jsx` for components, `camelCase.js` for everything else.
+3. File names: `PascalCase.tsx` for components, `camelCase.ts` for everything else. Import with the extension (`./App.tsx`).
+4. Data from outside the app (JSON, URL params, storage, form values) is `unknown` until a type guard narrows it. No `as` casts on untrusted data.
 
 ## API contract
 
@@ -184,7 +192,7 @@ bazaarMock.reset(); // wipe orders, sessions, stock changes
 | Day | Theme      | Tasks                                                                                                                | Pts | Status |
 | --- | ---------- | -------------------------------------------------------------------------------------------------------------------- | --- | ------ |
 | 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                               | —   | ✅     |
-| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript · D1-4 Data layer                                      | 15  | 🟡     |
+| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer                                   | 15  | 🟡     |
 | 2   | Browse     | D2-1 Product list · D2-2 Filters · D2-3 UI states · D2-4 Effects cleanup · D2-5 Custom hooks · D2-6 Race conditions  | 21  | ⬜     |
 | 3   | Buy        | D3-1 Redux Toolkit · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching                                      | 21  | ⬜     |
 | 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring | 22  | ⬜     |
@@ -217,5 +225,5 @@ Follow [docs/workflow.md](docs/workflow.md). In short:
 | `docs/ARCHITECTURE.md`                               | Structure, data flow, state, patterns (D5-1, D5-2) |
 | `docs/orders.md`                                     | Queue-based order flow design (D5-3)               |
 | `docs/glossary.md`                                   | Architecture vocabulary (D5-4)                     |
-| `docs/ai-notes.md`                                   | AI usage log (D5-7)                                |
+| [docs/ai-notes.md](docs/ai-notes.md)                 | AI usage log (D5-7)                                |
 | `docs/reflection.md`                                 | Self-assessment (D5-8)                             |

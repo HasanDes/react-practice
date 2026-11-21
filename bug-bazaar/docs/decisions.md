@@ -111,3 +111,52 @@ One entry per task: **what I used**, **what else I considered**, and **why**. Ne
 - **Considered:** Jest (needs extra ESM/Vite transform config); a manual checklist.
 - **Why:** Vitest reuses the Vite config and is the natural runner for D4-5. Writing contract tests _now_ is the proof for D1-2's "Done when".
 - **Windows quirk:** `npm test` runs Vitest through `scripts/vitest.mjs`. A terminal opened at lowercase `d:\` (VS Code's default here) makes Vitest load two copies of itself ("failed to find the runner"). Normalizing the drive letter in a vite config hook ran too late. A tiny launcher that starts Vitest from an upper-cased cwd fixes it, and it's a no-op on macOS/Linux/CI.
+
+---
+
+## D1-3: TypeScript
+
+### Compiler: TypeScript 6.0 (not 7)
+
+- **Used:** `typescript@~6.0` with `tsc -b` (project references: `tsconfig.app.json` for `src/`, `tsconfig.node.json` for `vite.config.ts`).
+- **Considered:** TypeScript 7 (the native Go port, much faster).
+- **Why:** `typescript-eslint` supports TypeScript < 6.1 only, and its **type-aware rules** are what enforce "no `any`" beyond explicit annotations (see below). MSW 3 needs ≥ 5.9. I'll move to 7 when `typescript-eslint` supports it. The codebase is small, so speed isn't a problem yet.
+- **TS 6 gotcha:** `types` no longer auto-includes every `@types/*` package, so each tsconfig lists its ambient types explicitly (`vite/client`, `node`).
+
+### Strictness: `strict` plus extra flags
+
+- **Used:** `strict: true` plus `noUncheckedIndexedAccess`, `noImplicitReturns`, `noImplicitOverride`, `noFallthroughCasesInSwitch`, `noUnusedLocals/Parameters`, `noPropertyAccessFromIndexSignature`, `verbatimModuleSyntax`, `erasableSyntaxOnly`.
+- **Why the extras:**
+  - `noUncheckedIndexedAccess`: `array[i]` and `record[key]` are typed `T | undefined`. That's what makes `state.stock[id]` or `items[0]` honest. It caught real cases in the seed generator (`pick()` now requires a non-empty tuple type) and in the 409 builder (must have at least one item).
+  - `noPropertyAccessFromIndexSignature`: forces `details["email"]` over `details.email` on dictionaries, so it's visible at the call site that the key might not exist.
+  - `erasableSyntaxOnly` + `verbatimModuleSyntax`: no enums or namespaces (TS-only runtime syntax), and explicit `import type`. The code stays plain JS with types erased, which is what Vite/esbuild expects.
+- **Considered:** `exactOptionalPropertyTypes`. Skipped: it creates a lot of friction with React and library types for little gain at this size.
+
+### "No `any`, no `@ts-ignore`": enforced, not promised
+
+- **Used:** `typescript-eslint` `strictTypeChecked` with `no-explicit-any` and `ban-ts-comment` (bans `@ts-ignore`, `@ts-nocheck` **and** `@ts-expect-error`) as errors. The type-aware `no-unsafe-*` rules also catch **implicit** `any` from `JSON.parse`, `response.json()` and similar.
+- **Considered:** relying on `tsc` alone (`noImplicitAny` only covers _unannotated_ code; `JSON.parse()` still returns `any` silently), or a grep in CI.
+- **Why:** verified with a probe file. ESLint flagged an explicit `any`, a `@ts-ignore`, and four separate `any` leaks from one `JSON.parse` call. The `@ts-ignore` really did hide a type error from `tsc`, which shows why it has to be banned.
+- **Untrusted data pattern:** anything from outside (request bodies, `localStorage`, URL params, `<select>` values) is typed `unknown` and narrowed with type guards (`isCategory`, `isSortOption`, `isSeverity`, `isMockRoute`, `isObject`). The remaining `as` casts are limited to (a) data the app wrote itself (`localStorage` snapshots, after a shape check) and (b) test fixtures, where the cast states the expected response shape and `expect()` verifies it.
+
+### Request status: a discriminated union
+
+- **Used:** `RequestState<T, E> = { status: "idle" } | { status: "loading" } | { status: "success"; data: T } | { status: "error"; error: E }` in `src/types/request.ts`.
+- **Considered:** separate `isLoading` / `error` / `data` fields (Week 1 had `status` + `error` + `bugs` as three `useState`s).
+- **Why:** three independent fields allow 2³ combinations, most of them nonsense ("loading, with an error, and data"). With the union, `data` **exists only** when `status === "success"`, and TypeScript forces the check before reading it. The probe confirmed that `{ status: "loading", data: [...] }` and reading `state.data` unchecked are both compile errors.
+- **Applied:** `App` holds one `RequestState<Bug[]>` instead of three states. `LoadGate` is generic and takes a **render prop** `children: (data: T) => ReactNode` that is only called in the success state, so a page _can't_ render before its data exists. Its `switch` covers every status, and `noImplicitReturns` fails the build if a new status is added but not handled.
+
+### Contract types: one source of truth
+
+- **Used:** `src/types/api.ts` holds `Product`, `ApiError` (with a typed `ApiErrorCode` union), and request/response types for every endpoint. `CATEGORIES`/`SORTS` are `as const` arrays, and the union types are derived from them, so the runtime list and the type can't diverge.
+- **Why:** the mock (`src/mocks/`) and the app import the same types. If the contract changes, both sides fail to compile until they agree. D1-4's data layer will be typed against the same file.
+- `Cents` is a plain alias, not a branded type. Branding would need a cast every time JSON enters the app. The name documents the unit, and `formatPrice` (D2-1) will be the single place cents become a string.
+
+### A real bug the migration caught
+
+TypeScript flagged `onUnhandledRequest` as an unknown option. **MSW 3 renamed it to `onUnhandledFrame`**, and the D1-2 JavaScript had silently ignored it:
+
+- the contract tests' "error on any unmocked request" safety net was never active
+- the browser used the default `"warn"` instead of `"bypass"`
+
+Both are fixed now. A good example of types catching what tests didn't (logged in `docs/ai-notes.md`).

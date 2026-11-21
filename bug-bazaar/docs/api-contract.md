@@ -1,6 +1,6 @@
 # API Contract
 
-The shared contract every Bug Bazaar task builds against. The app runs against a **mock backend** (MSW, see [Mock backend](#mock-backend)) that implements exactly this document. Contract tests in `src/mocks/handlers.test.js` check every endpoint and every listed error.
+The shared contract every Bug Bazaar task builds against. The app runs against a **mock backend** (MSW, see [Mock backend](#mock-backend)) that implements exactly this document. Contract tests in `src/mocks/handlers.test.ts` check every endpoint and every listed error.
 
 - **Base URL:** `/api` (configurable with `VITE_API_BASE_URL` from D1-4)
 - **Format:** JSON request and response bodies (`Content-Type: application/json`)
@@ -10,6 +10,8 @@ The shared contract every Bug Bazaar task builds against. The app runs against a
 ---
 
 ## Types
+
+Source of truth in code: [`src/types/api.ts`](../src/types/api.ts). The app and the mock both import from it, so they can't drift apart.
 
 ```ts
 type Category = "keyboards" | "ducks" | "coffee" | "stickers";
@@ -165,18 +167,18 @@ Clients should branch on `status` and `error.code`, never on `message` text. `me
 
 ## Mock backend
 
-Implemented with [MSW](https://mswjs.io/) in `src/mocks/`. It starts automatically before the app renders (`src/main.jsx`). Turn it off with `VITE_USE_MOCK_API=false`.
+Implemented with [MSW](https://mswjs.io/) in `src/mocks/`. It starts automatically before the app renders (`src/main.tsx`). Turn it off with `VITE_USE_MOCK_API=false`.
 
 | File               | Role                                                                                       |
 | ------------------ | ------------------------------------------------------------------------------------------ |
-| `contract.js`      | Constants (categories, sorts, page sizes) and the allowed errors for each route            |
-| `data/seed.js`     | Deterministic generator: the same 5,000 products every time (seeded PRNG)                  |
-| `queryProducts.js` | Pure search/filter/sort/paginate logic                                                     |
-| `db.js`            | Mock state: stock changes, sessions, orders, idempotency keys, persisted to `localStorage` |
-| `controls.js`      | Latency and forced-error switches                                                          |
-| `handlers.js`      | The HTTP endpoints above                                                                   |
-| `browser.js`       | Starts the Service Worker and exposes `window.bazaarMock`                                  |
-| `handlers.test.js` | Contract tests (`npm test`)                                                                |
+| `contract.ts`      | Constants (categories, sorts, page sizes) and the allowed errors for each route            |
+| `data/seed.ts`     | Deterministic generator: the same 5,000 products every time (seeded PRNG)                  |
+| `queryProducts.ts` | Pure search/filter/sort/paginate logic                                                     |
+| `db.ts`            | Mock state: stock changes, sessions, orders, idempotency keys, persisted to `localStorage` |
+| `controls.ts`      | Latency and forced-error switches                                                          |
+| `handlers.ts`      | The HTTP endpoints above                                                                   |
+| `browser.ts`       | Starts the Service Worker and exposes `window.bazaarMock`                                  |
+| `handlers.test.ts` | Contract tests (`npm test`)                                                                |
 
 **Persistence:** stock changes, sessions and orders survive a page reload, like a real server. Clear them with `bazaarMock.reset()`.
 
