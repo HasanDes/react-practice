@@ -7,7 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { setupServer } from "msw/node";
 import { MemoryRouter } from "react-router-dom";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import App from "../../app/App.tsx";
+import TestApp from "../../test/TestApp.tsx";
 import { createControls, type MockControls } from "../../mocks/controls.ts";
 import { createDb, createMemoryStorage, type MockDb } from "../../mocks/db.ts";
 import { createHandlers } from "../../mocks/handlers.ts";
@@ -30,7 +30,7 @@ function renderAt(path: string) {
   const user = userEvent.setup();
   render(
     <MemoryRouter initialEntries={[path]}>
-      <App />
+      <TestApp />
     </MemoryRouter>,
   );
   return { user };
@@ -82,10 +82,11 @@ describe("product grid", () => {
     const first = catalogProduct(1);
     const second = catalogProduct(2);
 
-    // Skip link → site title → each filter control → first card. One Tab stop per card.
+    // Skip link → site title → cart → each filter control → first card. One Tab stop per card.
     const expectedOrder = [
       screen.getByRole("link", { name: "Skip to content" }),
       screen.getByRole("link", { name: /the bug bazaar/i }),
+      screen.getByRole("link", { name: "Cart, 0 items" }),
       screen.getByRole("searchbox", { name: "Search" }),
       screen.getByRole("combobox", { name: "Category" }),
       screen.getByRole("combobox", { name: "Sort by" }),

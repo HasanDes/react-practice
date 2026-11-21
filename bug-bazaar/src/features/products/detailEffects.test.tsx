@@ -8,7 +8,7 @@ import { delay, http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import App from "../../app/App.tsx";
+import TestApp from "../../test/TestApp.tsx";
 import { createControls } from "../../mocks/controls.ts";
 import { createDb, createMemoryStorage, type MockDb } from "../../mocks/db.ts";
 import { createHandlers } from "../../mocks/handlers.ts";
@@ -60,7 +60,7 @@ function renderAt(path: string) {
   const user = userEvent.setup();
   const view = render(
     <MemoryRouter initialEntries={[path]}>
-      <App />
+      <TestApp />
       <TestNav />
     </MemoryRouter>,
   );

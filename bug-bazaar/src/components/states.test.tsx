@@ -8,7 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { setupServer } from "msw/node";
 import { MemoryRouter } from "react-router-dom";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import App from "../app/App.tsx";
+import TestApp from "../test/TestApp.tsx";
 import { createControls, type MockControls } from "../mocks/controls.ts";
 import { createDb, createMemoryStorage } from "../mocks/db.ts";
 import { createHandlers } from "../mocks/handlers.ts";
@@ -28,7 +28,7 @@ function renderAt(path: string) {
   const user = userEvent.setup();
   render(
     <MemoryRouter initialEntries={[path]}>
-      <App />
+      <TestApp />
     </MemoryRouter>,
   );
   return { user };
@@ -109,7 +109,7 @@ describe("consistency across pages", () => {
       controls.fail(page.route, 500, { once: true });
       const view = render(
         <MemoryRouter initialEntries={[page.path]}>
-          <App />
+          <TestApp />
         </MemoryRouter>,
       );
       const alert = await screen.findByRole("alert");

@@ -1,7 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { Provider } from "react-redux";
 import { BrowserRouter } from "react-router-dom";
 import App from "./app/App.tsx";
+import { connectApiToStore } from "./store/connectApi.ts";
+import { makeStore } from "./store/store.ts";
 import "./styles/global.css";
 
 /**
@@ -17,15 +20,22 @@ async function enableMocking(): Promise<void> {
   await startMockApi();
 }
 
+const store = makeStore();
+
+// The data layer reads the token from the session; a 401 ends the session.
+connectApiToStore(store);
+
 function renderApp(): void {
   const container = document.getElementById("root");
   if (!container) throw new Error("index.html is missing the #root element");
 
   ReactDOM.createRoot(container).render(
     <React.StrictMode>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <Provider store={store}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </Provider>
     </React.StrictMode>,
   );
 }

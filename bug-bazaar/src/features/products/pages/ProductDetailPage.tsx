@@ -22,6 +22,7 @@ import { useDocumentTitle } from "../../../hooks/useDocumentTitle.ts";
 import { useRequest } from "../../../hooks/useRequest.ts";
 import type { Product } from "../../../types/api.ts";
 import { formatPrice } from "../../../utils/formatPrice.ts";
+import AddToCart from "../../cart/components/AddToCart.tsx";
 import ProductGrid from "../components/ProductGrid.tsx";
 import StockStatus from "../components/StockStatus.tsx";
 import { CATEGORY_LABELS } from "../filters.ts";
@@ -106,6 +107,7 @@ function ProductDetails({ product }: { product: Product }) {
         </h2>
         <p className="product-detail__price">{formatPrice(product.price)}</p>
         <StockStatus stock={product.stock} />
+        <AddToCart product={product} />
         <dl className="product-detail__facts">
           <dt>Category</dt>
           <dd>{CATEGORY_LABELS[product.category]}</dd>

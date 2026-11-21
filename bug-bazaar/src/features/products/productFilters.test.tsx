@@ -8,7 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { setupServer } from "msw/node";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import App from "../../app/App.tsx";
+import TestApp from "../../test/TestApp.tsx";
 import { createControls } from "../../mocks/controls.ts";
 import { createDb, createMemoryStorage, type MockDb } from "../../mocks/db.ts";
 import { createHandlers } from "../../mocks/handlers.ts";
@@ -44,7 +44,7 @@ function renderAt(url: string) {
   const user = userEvent.setup();
   const view = render(
     <MemoryRouter initialEntries={[url]}>
-      <App />
+      <TestApp />
       <BrowserChrome />
     </MemoryRouter>,
   );
