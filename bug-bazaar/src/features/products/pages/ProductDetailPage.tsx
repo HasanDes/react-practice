@@ -14,10 +14,11 @@
 
 import { useEffect, useRef } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { getProduct, getProducts, isApiRequestError } from "../../../api/index.ts";
+import { getProduct, getProducts } from "../../../api/index.ts";
 import BackToTop from "../../../components/BackToTop.tsx";
 import LoadGate from "../../../components/LoadGate.tsx";
-import { EmptyState, LoadingState } from "../../../components/states.tsx";
+import { EmptyState, LoadingState, NotFoundState } from "../../../components/states.tsx";
+import { classifyError } from "../../../errors/appError.ts";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle.ts";
 import { useRequest } from "../../../hooks/useRequest.ts";
 import type { Product } from "../../../types/api.ts";
@@ -45,8 +46,7 @@ function ProductDetailPage({ id }: { id: string }) {
   // be written into this page.
   const { state: product, retry } = useRequest(id, (signal) => getProduct(id, { signal }));
 
-  const notFound =
-    product.status === "error" && isApiRequestError(product.error) && product.error.status === 404;
+  const notFound = product.status === "error" && classifyError(product.error).kind === "not-found";
   useDocumentTitle(
     product.status === "success" ? product.data.name : notFound ? "Product not found" : null,
   );
@@ -59,16 +59,13 @@ function ProductDetailPage({ id }: { id: string }) {
         onRetry={retry}
         subject="this product"
         loading={<LoadingState label="Loading product…" variant="detail" />}
-        renderError={() =>
-          // 404 isn't a failure to retry: the product doesn't exist. Show "not found" instead.
-          notFound ? (
-            <EmptyState
-              icon="🦆"
-              title="Product not found"
-              description="We couldn't find that product. It may have been removed, or the link is wrong."
-              action={<BackLink className="button button--primary" />}
-            />
-          ) : null
+        notFound={
+          // 404 isn't a failure to retry: the product doesn't exist.
+          <NotFoundState
+            title="Product not found"
+            description="We couldn't find that product. It may have been removed, or the link is wrong."
+            action={<BackLink className="button button--primary" />}
+          />
         }
       >
         {(data) => (

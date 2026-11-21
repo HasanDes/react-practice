@@ -2,7 +2,8 @@
 // (and tested) on its own: send the order with an idempotency key, and
 // turn every failure into a problem the page knows how to explain.
 
-import { createOrder, getProduct, isApiRequestError } from "../../api/index.ts";
+import { createOrder, getProduct } from "../../api/index.ts";
+import { classifyError } from "../../errors/appError.ts";
 import type { CreateOrderResponse } from "../../types/api.ts";
 import type { CartItem } from "../cart/cartSlice.ts";
 
@@ -35,21 +36,24 @@ export async function placeOrder(
       { idempotencyKey },
     );
     return { ok: true, order };
-  } catch (error) {
-    if (!isApiRequestError(error)) {
-      return { ok: false, problem: { kind: "retryable", reason: "server" }, freshStock: [] };
-    }
-    if (error.kind === "network") return retryable("offline");
-    if (error.kind === "timeout") return retryable("timeout");
-
-    switch (error.status) {
-      case 409:
-        return outOfStock(items, Object.keys(error.details));
-      case 401:
+  } catch (thrown) {
+    // Same AppError kinds as every page (D3-4); checkout adds what each means here.
+    const error = classifyError(thrown);
+    switch (error.kind) {
+      case "out-of-stock":
+        return outOfStock(items, error.productIds);
+      case "unauthenticated":
         return { ok: false, problem: { kind: "session-expired" }, freshStock: [] };
-      case 400:
+      case "invalid-input":
+      case "not-found": // an unknown product id: the cart needs reviewing, not a retry
         return { ok: false, problem: { kind: "invalid-cart" }, freshStock: [] };
-      default:
+      case "offline":
+        return retryable("offline");
+      case "timeout":
+        return retryable("timeout");
+      case "server":
+      case "unexpected":
+      case "cancelled":
         return retryable("server");
     }
   }

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { getOrder, isAbortError, isApiRequestError } from "../../../api/index.ts";
+import { getOrder, isAbortError } from "../../../api/index.ts";
 import LoadGate from "../../../components/LoadGate.tsx";
-import { EmptyState, LoadingState } from "../../../components/states.tsx";
+import { LoadingState, NotFoundState } from "../../../components/states.tsx";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle.ts";
 import type { Order, OrderStatus } from "../../../types/api.ts";
 import { requestState, type RequestState } from "../../../types/request.ts";
@@ -69,19 +69,16 @@ export default function OrderConfirmationPage() {
         }}
         subject="this order"
         loading={<LoadingState label="Loading your order…" variant="detail" />}
-        renderError={(error) =>
-          isApiRequestError(error) && error.status === 404 ? (
-            <EmptyState
-              icon="📦"
-              title="Order not found"
-              description="We couldn't find that order on your account."
-              action={
-                <Link to="/" className="button button--primary">
-                  Continue shopping
-                </Link>
-              }
-            />
-          ) : null
+        notFound={
+          <NotFoundState
+            title="Order not found"
+            description="We couldn't find that order on your account."
+            action={
+              <Link to="/" className="button button--primary">
+                Continue shopping
+              </Link>
+            }
+          />
         }
       >
         {(data) => (

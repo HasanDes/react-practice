@@ -1,4 +1,5 @@
 import { useRef, type ReactNode } from "react";
+import { classifyError } from "../errors/appError.ts";
 import type { RequestState } from "../types/request.ts";
 import { ErrorState } from "./states.tsx";
 
@@ -12,8 +13,11 @@ type LoadGateProps<T> = {
   /** "Empty" is derived from successful data, not stored as a separate status. */
   isEmpty?: (data: T) => boolean;
   empty?: ReactNode;
-  /** Override for specific errors (e.g. 404 → "not found"). Return null for the default. */
-  renderError?: (error: Error) => ReactNode;
+  /**
+   * Shown instead of the error state when the server says 404: the item
+   * doesn't exist, so "Try again" would be pointless (usually a <NotFoundState>).
+   */
+  notFound?: ReactNode;
   /** Render prop: receives data only on success, so it can't render without data. */
   children: (data: T) => ReactNode;
 };
@@ -29,7 +33,7 @@ export default function LoadGate<T>({
   loading,
   isEmpty,
   empty,
-  renderError,
+  notFound,
   children,
 }: LoadGateProps<T>) {
   const regionRef = useRef<HTMLDivElement>(null);
@@ -48,9 +52,12 @@ export default function LoadGate<T>({
       content = loading;
       break;
     case "error":
-      content = renderError?.(state.error) ?? (
-        <ErrorState error={state.error} subject={subject} onRetry={retry} />
-      );
+      content =
+        notFound !== undefined && classifyError(state.error).kind === "not-found" ? (
+          notFound
+        ) : (
+          <ErrorState error={state.error} subject={subject} onRetry={retry} />
+        );
       break;
     case "success":
       content = isEmpty?.(state.data) ? empty : children(state.data);

@@ -1,7 +1,8 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { Navigate, useSearchParams } from "react-router-dom";
-import { isApiRequestError, login } from "../../../api/index.ts";
+import { login } from "../../../api/index.ts";
+import { classifyError, type AppError } from "../../../errors/appError.ts";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle.ts";
 import { useAppDispatch, useAppSelector } from "../../../store/store.ts";
 import { safeReturnTo } from "../returnTo.ts";
@@ -14,7 +15,7 @@ type FieldErrors = Partial<Record<Field, string>>;
 type LoginStatus =
   | { status: "idle" }
   | { status: "submitting" }
-  | { status: "failed"; fieldErrors: FieldErrors; message: string | null };
+  | { status: "failed"; fieldErrors: FieldErrors; formError: string };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const mockEnabled = import.meta.env.VITE_USE_MOCK_API !== "false";
@@ -34,37 +35,44 @@ function validate(email: string, password: string): FieldErrors {
   return errors;
 }
 
-/** Map a failed login to what the form shows. Branches on kind/status, never on message text. */
-function describeLoginFailure(error: unknown): {
-  fieldErrors: FieldErrors;
-  message: string | null;
-} {
-  if (isApiRequestError(error)) {
-    if (error.status === 400) {
+/**
+ * What the form shows for a failed login. Same AppError kinds as every other
+ * page (D3-4); the wording fits a form. 400 → the named fields; 401 → wrong
+ * credentials (on login, a 401 isn't an expired session); offline, timeout
+ * and server errors → submit again.
+ */
+function describeLoginFailure(error: AppError): { fieldErrors: FieldErrors; formError: string } {
+  switch (error.kind) {
+    case "invalid-input": {
       const fieldErrors: FieldErrors = {};
-      if ("email" in error.details) fieldErrors.email = FIELD_COPY.email;
-      if ("password" in error.details) fieldErrors.password = FIELD_COPY.password;
+      if (error.fields.includes("email")) fieldErrors.email = FIELD_COPY.email;
+      if (error.fields.includes("password")) fieldErrors.password = FIELD_COPY.password;
       return Object.keys(fieldErrors).length > 0
-        ? { fieldErrors, message: null }
-        : { fieldErrors, message: "Check your email and password, then try again." };
+        ? { fieldErrors, formError: "" }
+        : { fieldErrors, formError: "Check your email and password, then try again." };
     }
-    if (error.status === 401) {
+    case "unauthenticated":
       return {
         fieldErrors: {},
-        message: "That email and password don't match. Please check them and try again.",
+        formError: "That email and password don't match. Please check them and try again.",
       };
-    }
-    if (error.kind === "network") {
+    case "offline":
       return {
         fieldErrors: {},
-        message: "You seem to be offline. Check your connection, then try again.",
+        formError: "You seem to be offline. Check your connection, then try again.",
       };
-    }
-    if (error.kind === "timeout") {
-      return { fieldErrors: {}, message: "Signing in is taking too long. Please try again." };
-    }
+    case "timeout":
+      return { fieldErrors: {}, formError: "Signing in is taking too long. Please try again." };
+    case "server":
+    case "unexpected":
+    case "not-found":
+    case "out-of-stock":
+    case "cancelled":
+      return {
+        fieldErrors: {},
+        formError: "We couldn't sign you in right now. Please try again.",
+      };
   }
-  return { fieldErrors: {}, message: "We couldn't sign you in right now. Please try again." };
 }
 
 export default function LoginPage() {
@@ -77,7 +85,7 @@ export default function LoginPage() {
   const [status, setStatus] = useState<LoginStatus>({ status: "idle" });
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
-  const messageRef = useRef<HTMLParagraphElement>(null);
+  const formErrorRef = useRef<HTMLParagraphElement>(null);
   const inFlight = useRef(false);
   const emailId = useId();
   const passwordId = useId();
@@ -88,15 +96,15 @@ export default function LoginPage() {
   if (session.status === "authenticated") return <Navigate to={returnTo} replace />;
 
   /** Show the failure, then move focus to the first thing to fix. */
-  function fail(fieldErrors: FieldErrors, message: string | null) {
+  function fail(fieldErrors: FieldErrors, formError: string) {
     // flushSync: render the error text and aria-invalid *before* moving
     // focus, so a screen reader reads the field together with its error.
     flushSync(() => {
-      setStatus({ status: "failed", fieldErrors, message });
+      setStatus({ status: "failed", fieldErrors, formError });
     });
     if (fieldErrors.email) emailRef.current?.focus();
     else if (fieldErrors.password) passwordRef.current?.focus();
-    else messageRef.current?.focus();
+    else formErrorRef.current?.focus();
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -109,7 +117,7 @@ export default function LoginPage() {
 
     const invalid = validate(email, password);
     if (Object.keys(invalid).length > 0) {
-      fail(invalid, null);
+      fail(invalid, "");
       return;
     }
 
@@ -119,9 +127,9 @@ export default function LoginPage() {
       const result = await login({ email: email.trim(), password });
       dispatch(sessionStarted(result)); // the <Navigate> above takes it from here
     } catch (error) {
-      const { fieldErrors, message } = describeLoginFailure(error);
+      const { fieldErrors, formError } = describeLoginFailure(classifyError(error));
       setPassword(""); // don't leave a rejected password sitting in the form
-      fail(fieldErrors, message);
+      fail(fieldErrors, formError);
     } finally {
       inFlight.current = false;
     }
@@ -129,7 +137,7 @@ export default function LoginPage() {
 
   const submitting = status.status === "submitting";
   const errors = status.status === "failed" ? status.fieldErrors : {};
-  const message = status.status === "failed" ? status.message : null;
+  const formError = status.status === "failed" ? status.formError : "";
 
   return (
     <section aria-labelledby="login-heading" className="auth">
@@ -147,12 +155,12 @@ export default function LoginPage() {
         {/* Always rendered, so the alert region exists before its text changes
             (more reliable announcements). tabIndex -1: focusable from code only. */}
         <p
-          ref={messageRef}
+          ref={formErrorRef}
           tabIndex={-1}
           role="alert"
-          className={message ? "auth__error" : "visually-hidden"}
+          className={formError ? "auth__error" : "visually-hidden"}
         >
-          {message}
+          {formError}
         </p>
 
         <div className="auth__field">

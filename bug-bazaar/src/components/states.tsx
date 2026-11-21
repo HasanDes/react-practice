@@ -2,7 +2,10 @@
 // with the same building blocks, so they look and behave consistently (D2-3).
 
 import type { ReactNode } from "react";
-import { describeLoadError } from "../utils/describeError.ts";
+import { Link, useLocation } from "react-router-dom";
+import { classifyError } from "../errors/appError.ts";
+import { describeLoadError } from "../errors/describeError.ts";
+import { loginHref } from "../features/auth/returnTo.ts";
 
 type StateCardProps = {
   tone: "neutral" | "error";
@@ -12,15 +15,21 @@ type StateCardProps = {
   actions?: ReactNode;
   /** "alert" for errors (announced immediately); omitted for calm states. */
   role?: "alert";
+  /** Render the title as the page's heading (when the card *is* the page, e.g. Not Found). */
+  asHeading?: boolean;
 };
 
-function StateCard({ tone, icon, title, description, actions, role }: StateCardProps) {
+function StateCard({ tone, icon, title, description, actions, role, asHeading }: StateCardProps) {
   return (
     <div className={`state state--${tone}`} role={role}>
       <span className="state__icon" aria-hidden="true">
         {icon}
       </span>
-      <p className="state__title">{title}</p>
+      {asHeading ? (
+        <h2 className="state__title">{title}</h2>
+      ) : (
+        <p className="state__title">{title}</p>
+      )}
       {description && <p className="state__description">{description}</p>}
       {actions && <div className="state__actions">{actions}</div>}
     </div>
@@ -55,9 +64,18 @@ type ErrorStateProps = {
   onRetry: () => void;
 };
 
-/** A failed load: friendly copy chosen by error kind, plus Try again. */
+/**
+ * A failed load. The error is classified (errors/appError.ts) and the copy
+ * comes from one table, so every page words the same failure the same way.
+ * "Try again" only when retrying can help (5xx, offline, timeout); "Sign in"
+ * when the session ended. The error's own message is never rendered.
+ */
 export function ErrorState({ error, subject, onRetry }: ErrorStateProps) {
-  const { title, description, retryable } = describeLoadError(error, subject);
+  const location = useLocation();
+  const { title, description, retryable, signIn } = describeLoadError(
+    classifyError(error),
+    subject,
+  );
   return (
     <StateCard
       tone="error"
@@ -66,12 +84,46 @@ export function ErrorState({ error, subject, onRetry }: ErrorStateProps) {
       description={description}
       role="alert"
       actions={
-        retryable && (
-          <button type="button" className="button button--primary" onClick={onRetry}>
-            Try again
-          </button>
+        (retryable || signIn) && (
+          <>
+            {retryable && (
+              <button type="button" className="button button--primary" onClick={onRetry}>
+                Try again
+              </button>
+            )}
+            {signIn && (
+              <Link to={loginHref(location)} className="button button--primary">
+                Sign in
+              </Link>
+            )}
+          </>
         )
       }
+    />
+  );
+}
+
+type NotFoundStateProps = {
+  title: string;
+  description: ReactNode;
+  /** The way out, e.g. "Back to products". */
+  action: ReactNode;
+};
+
+/**
+ * 404: the thing doesn't exist, so there's nothing to retry. Used by the
+ * catch-all route and by pages whose item is missing (product, order), so
+ * every Not Found looks the same. The title is the page heading.
+ */
+export function NotFoundState({ title, description, action }: NotFoundStateProps) {
+  return (
+    <StateCard
+      tone="neutral"
+      icon="🦆"
+      title={title}
+      description={description}
+      actions={action}
+      asHeading
     />
   );
 }

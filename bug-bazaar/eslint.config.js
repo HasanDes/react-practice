@@ -110,6 +110,24 @@ export default tseslint.config(
     },
   },
 
+  // D3-4: raw error messages never reach the screen. UI code can't read an
+  // error's `.message` at all; it classifies the error (src/errors/appError.ts)
+  // and uses our own copy. Logging code lives outside these folders.
+  {
+    files: ["src/{app,components,features,hooks,dev}/**/*.{ts,tsx}"],
+    ignores: ["src/**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "MemberExpression[property.name='message']",
+          message:
+            "Raw error messages never reach the screen (D3-4). Use classifyError() from src/errors and our own copy.",
+        },
+      ],
+    },
+  },
+
   // Node-side tooling (plain JS, no type-aware linting).
   {
     files: ["*.config.js", "scripts/**/*.{js,mjs}"],
