@@ -53,7 +53,7 @@ export default function App() {
     <div className="app">
       <header>
         <h1>
-          <Link to="/">Bug Bounty Board</Link>
+          <Link to="/">The Bug Bazaar</Link>
         </h1>
       </header>
       <main>
