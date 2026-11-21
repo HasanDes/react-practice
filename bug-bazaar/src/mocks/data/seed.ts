@@ -129,7 +129,9 @@ export function generateProducts(count = 5000): Product[] {
       category,
       stock: stockLevel(random),
       rating: Math.round((2.5 + random() * 2.5) * 10) / 10,
-      imageUrl: `/images/products/${category}.svg`,
+      // Under the app's base path, so images also load when it's served from a
+      // subfolder (GitHub Pages: /react-practice/). "/" in development and tests.
+      imageUrl: `${import.meta.env.BASE_URL}images/products/${category}.svg`,
     });
   }
 

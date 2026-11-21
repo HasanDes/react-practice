@@ -1,0 +1,2 @@
+# Workflow files stay LF on every OS (the app folder has its own .gitattributes).
+/.github/** text eol=lf

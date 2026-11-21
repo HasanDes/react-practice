@@ -1,0 +1,89 @@
+# CI for the Bug Bazaar (D4-6): every pull request must pass lint, formatting,
+# type checks, tests and a production build, plus the Lighthouse accessibility
+# gate. Branch protection on `develop` marks these jobs as required, so a
+# failing test blocks the merge. See bug-bazaar/docs/ci.md.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, master]
+  push:
+    branches: [develop, master]
+  workflow_dispatch:
+
+# Read-only token: CI never needs to write to the repository.
+permissions:
+  contents: read
+
+# A new push to the same PR cancels the run it supersedes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: bug-bazaar
+
+jobs:
+  checks:
+    name: Lint, types, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: bug-bazaar/.nvmrc
+          cache: npm
+          cache-dependency-path: bug-bazaar/package-lock.json
+
+      - name: Install (exact versions from package-lock.json)
+        run: npm ci
+
+      # One step per gate, so a red run says which gate failed.
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Formatting (Prettier)
+        run: npm run format:check
+
+      - name: Type check (tsc)
+        run: npm run typecheck
+
+      - name: Tests (Vitest) with coverage
+        run: npm run test:coverage
+
+      - name: Production build
+        run: npx vite build
+
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: bug-bazaar/coverage/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  accessibility:
+    name: Accessibility (Lighthouse ≥ 90)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: bug-bazaar/.nvmrc
+          cache: npm
+          cache-dependency-path: bug-bazaar/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # Builds, serves the build, and runs Lighthouse on home, cart and login
+      # with the runner's Chrome. Exits non-zero below 90.
+      - name: Lighthouse accessibility
+        run: npm run a11y

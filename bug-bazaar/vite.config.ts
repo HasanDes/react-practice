@@ -2,6 +2,9 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  // The URL path the app is served from. "/" locally; the deploy workflow
+  // sets VITE_BASE_PATH=/react-practice/ for GitHub Pages (D4-6).
+  base: process.env["VITE_BASE_PATH"] ?? "/",
   plugins: [react()],
   test: {
     environment: "node",

@@ -50,7 +50,8 @@ function renderApp(): void {
     <React.StrictMode>
       <Provider store={store}>
         <LiveStockContext.Provider value={liveStock.registry}>
-          <BrowserRouter>
+          {/* basename: the app can be served from a subfolder (D4-6 deploy). */}
+          <BrowserRouter basename={import.meta.env.BASE_URL}>
             <App />
           </BrowserRouter>
         </LiveStockContext.Provider>

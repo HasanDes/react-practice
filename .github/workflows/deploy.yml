@@ -1,0 +1,76 @@
+# Bonus for D4-6: deploy the main line automatically. In this repository the
+# main line is `develop` (the default branch, where pull requests merge), so
+# every push to it is built and published to GitHub Pages.
+#
+# One-time setup: Settings → Pages → Source: "GitHub Actions".
+# The app has no real backend: the deployed build runs the mock API in the
+# browser (Service Worker), like the local preview. See bug-bazaar/docs/ci.md.
+
+name: Deploy
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write # publish to GitHub Pages
+  id-token: write # prove the deployment comes from this workflow
+
+# One deployment at a time; a newer push waits rather than cancelling a live one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: bug-bazaar
+
+jobs:
+  build:
+    name: Check and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: bug-bazaar/.nvmrc
+          cache: npm
+          cache-dependency-path: bug-bazaar/package-lock.json
+
+      - run: npm ci
+
+      # The same gates as CI: nothing is deployed that wouldn't pass a PR.
+      - name: Lint, formatting, types, tests, build
+        run: npm run check
+
+      # GitHub Pages serves the site from /<repository>/, so the app is built
+      # for that path (router basename, asset and image URLs follow it).
+      - name: Build for GitHub Pages
+        run: npx vite build
+        env:
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+
+      # Pages has no SPA fallback: unknown paths get 404.html. Serving the app
+      # there too means deep links like /products/p-0001 open the app.
+      - name: Single-page app fallback
+        run: cp dist/index.html dist/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: bug-bazaar/dist
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
