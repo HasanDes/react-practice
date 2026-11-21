@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { Provider } from "react-redux";
 import { BrowserRouter } from "react-router-dom";
 import App from "./app/App.tsx";
+import { loadCart, persistCart } from "./features/cart/cartStorage.ts";
 import { connectApiToStore } from "./store/connectApi.ts";
 import { makeStore } from "./store/store.ts";
 import "./styles/global.css";
@@ -20,7 +21,10 @@ async function enableMocking(): Promise<void> {
   await startMockApi();
 }
 
-const store = makeStore();
+// The saved cart (validated) is the starting state; every change is saved again.
+const savedCart = loadCart();
+const store = makeStore(savedCart ? { cart: savedCart } : undefined);
+persistCart(store);
 
 // The data layer reads the token from the session; a 401 ends the session.
 connectApiToStore(store);

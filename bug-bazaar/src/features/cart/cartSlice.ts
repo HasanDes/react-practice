@@ -63,13 +63,27 @@ const cartSlice = createSlice({
       state.items = state.items.filter((item) => item.productId !== action.payload.productId);
     },
 
+    /**
+     * Fresh stock from the server (e.g. after a 409 at checkout). Quantities
+     * above the new stock are lowered; lines that are now sold out disappear.
+     */
+    stockRefreshed(state, action: PayloadAction<{ productId: string; stock: number }>) {
+      const { productId, stock } = action.payload;
+      const line = state.items.find((item) => item.productId === productId);
+      if (!line) return;
+      line.stock = Math.max(0, stock);
+      line.quantity = clamp(line.quantity, line.stock);
+      state.items = state.items.filter((item) => item.quantity > 0);
+    },
+
     cartCleared() {
       return initialState;
     },
   },
 });
 
-export const { itemAdded, quantityChanged, itemRemoved, cartCleared } = cartSlice.actions;
+export const { itemAdded, quantityChanged, itemRemoved, stockRefreshed, cartCleared } =
+  cartSlice.actions;
 export const cartReducer = cartSlice.reducer;
 
 // ---- Selectors --------------------------------------------------------------

@@ -1,15 +1,20 @@
 import { Link } from "react-router-dom";
 import { EmptyState } from "../../../components/states.tsx";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle.ts";
-import { useAppSelector } from "../../../store/store.ts";
+import { useAppDispatch, useAppSelector } from "../../../store/store.ts";
 import { formatPrice } from "../../../utils/formatPrice.ts";
-import { selectCartCount, selectCartItems, selectCartTotal } from "../cartSlice.ts";
+import {
+  itemRemoved,
+  quantityChanged,
+  selectCartCount,
+  selectCartItems,
+  selectCartTotal,
+} from "../cartSlice.ts";
+import QuantityStepper from "../components/QuantityStepper.tsx";
 
-/**
- * Read-only cart summary (D3-1): items, line totals and the derived total.
- * D3-2 adds quantity editing, removal, persistence and checkout.
- */
+/** Edit quantities, remove lines, see the derived total, go to checkout. */
 export default function CartPage() {
+  const dispatch = useAppDispatch();
   const items = useAppSelector(selectCartItems);
   const count = useAppSelector(selectCartCount);
   const total = useAppSelector(selectCartTotal);
@@ -33,7 +38,7 @@ export default function CartPage() {
         />
       ) : (
         <>
-          <ul className="cart-list">
+          <ul className="cart-list" aria-label="Items in your cart">
             {items.map((item) => (
               <li key={item.productId} className="cart-line">
                 <img
@@ -48,9 +53,29 @@ export default function CartPage() {
                     {item.name}
                   </Link>
                   <span className="cart-line__unit">{formatPrice(item.price)} each</span>
+                  {item.quantity >= item.stock && (
+                    <span className="cart-line__limit">
+                      Only {item.stock} available. That&apos;s all of them.
+                    </span>
+                  )}
                 </div>
-                <span className="cart-line__quantity">Qty {item.quantity}</span>
+                <QuantityStepper
+                  productName={item.name}
+                  quantity={item.quantity}
+                  max={item.stock}
+                  onChange={(quantity) =>
+                    dispatch(quantityChanged({ productId: item.productId, quantity }))
+                  }
+                />
                 <span className="cart-line__total">{formatPrice(item.price * item.quantity)}</span>
+                <button
+                  type="button"
+                  className="cart-line__remove"
+                  aria-label={`Remove ${item.name} from cart`}
+                  onClick={() => dispatch(itemRemoved({ productId: item.productId }))}
+                >
+                  Remove
+                </button>
               </li>
             ))}
           </ul>
@@ -60,6 +85,14 @@ export default function CartPage() {
             <dt>Total</dt>
             <dd data-testid="cart-total">{formatPrice(total)}</dd>
           </dl>
+          <div className="cart-actions">
+            <Link to="/" className="button">
+              Continue shopping
+            </Link>
+            <Link to="/checkout" className="button button--primary">
+              Go to checkout
+            </Link>
+          </div>
         </>
       )}
     </section>

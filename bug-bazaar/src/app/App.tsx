@@ -2,6 +2,8 @@ import { lazy, Suspense } from "react";
 import { Link, Route, Routes } from "react-router-dom";
 import CartLink from "../features/cart/components/CartLink.tsx";
 import CartPage from "../features/cart/pages/CartPage.tsx";
+import CheckoutPage from "../features/orders/pages/CheckoutPage.tsx";
+import OrderConfirmationPage from "../features/orders/pages/OrderConfirmationPage.tsx";
 import ProductDetailRoute from "../features/products/pages/ProductDetailPage.tsx";
 import ProductsPage from "../features/products/pages/ProductsPage.tsx";
 import NotFoundPage from "./NotFoundPage.tsx";
@@ -31,6 +33,8 @@ export default function App() {
           <Route path="/" element={<ProductsPage />} />
           <Route path="/products/:id" element={<ProductDetailRoute />} />
           <Route path="/cart" element={<CartPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/orders/:id" element={<OrderConfirmationPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
