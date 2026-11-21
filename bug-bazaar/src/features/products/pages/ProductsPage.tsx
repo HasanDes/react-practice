@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { getProducts, isAbortError } from "../../../api/index.ts";
+import { getProducts } from "../../../api/index.ts";
 import BackToTop from "../../../components/BackToTop.tsx";
 import LoadGate from "../../../components/LoadGate.tsx";
 import { EmptyState, LoadingState } from "../../../components/states.tsx";
-import type { ProductListResponse } from "../../../types/api.ts";
-import { requestState, type RequestState } from "../../../types/request.ts";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle.ts";
-import { toError } from "../../../utils/toError.ts";
+import { useRequest } from "../../../hooks/useRequest.ts";
 import Pagination from "../components/Pagination.tsx";
 import ProductFilters from "../components/ProductFilters.tsx";
 import ProductGrid from "../components/ProductGrid.tsx";
@@ -28,33 +26,12 @@ export default function ProductsPage() {
   // Canonical string for "which results are we showing". It changes exactly when the query does.
   const queryKey = toSearchParams(filters).toString();
 
-  const [attempt, setAttempt] = useState(0);
-  const [products, setProducts] = useState<RequestState<ProductListResponse>>(
-    requestState.loading(),
+  // The key changes exactly when the query does: the previous request is
+  // aborted and loading shows at once, so stale results never flash.
+  const { state: products, retry } = useRequest(queryKey, (signal) =>
+    getProducts(toProductQuery(filters, PAGE_SIZE), { signal }),
   );
   const headingRef = useRef<HTMLHeadingElement>(null);
-
-  // New query → show loading right away (adjusted during render, no stale flash).
-  const [shownKey, setShownKey] = useState(queryKey);
-  if (queryKey !== shownKey) {
-    setShownKey(queryKey);
-    setProducts(requestState.loading());
-  }
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const query = toProductQuery(parseFilters(new URLSearchParams(queryKey)), PAGE_SIZE);
-
-    getProducts(query, { signal: controller.signal })
-      .then((data) => setProducts(requestState.success(data)))
-      .catch((error: unknown) => {
-        if (!isAbortError(error)) setProducts(requestState.error(toError(error)));
-      });
-
-    // Changing filters (or leaving) cancels the old request, so a slow,
-    // stale response can never overwrite newer results.
-    return () => controller.abort();
-  }, [queryKey, attempt]);
 
   /** Push a new URL. Changing any filter starts again at page 1. */
   function updateFilters(changes: Partial<Filters>) {
@@ -69,11 +46,6 @@ export default function ProductsPage() {
     setSearchParams(toSearchParams({ ...filters, page }));
     // Don't strand keyboard users at the bottom. focus() also scrolls it into view.
     headingRef.current?.focus();
-  }
-
-  function retry() {
-    setProducts(requestState.loading());
-    setAttempt((current) => current + 1);
   }
 
   const filtered = hasActiveFilters(filters);

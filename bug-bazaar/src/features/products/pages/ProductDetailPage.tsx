@@ -5,23 +5,23 @@
 //   ----------------------------|---------------------------------------------
 //   fetch the product           | abort it (switching products, retrying, leaving)
 //   fetch related products      | abort it
+//   (both via useRequest, which owns the fetch/abort/retry lifecycle)
 //   document title              | restore the previous title
 //   Back to Top scroll listener | remove the listener, cancel the pending frame
 //   focus the heading           | none needed (one-off, synchronous)
 // And the route is keyed by id, so switching products mounts a fresh page:
 // state can never carry over from the previous product.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { getProduct, getProducts, isAbortError, isApiRequestError } from "../../../api/index.ts";
+import { getProduct, getProducts, isApiRequestError } from "../../../api/index.ts";
 import BackToTop from "../../../components/BackToTop.tsx";
 import LoadGate from "../../../components/LoadGate.tsx";
 import { EmptyState, LoadingState } from "../../../components/states.tsx";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle.ts";
+import { useRequest } from "../../../hooks/useRequest.ts";
 import type { Product } from "../../../types/api.ts";
-import { requestState, type RequestState } from "../../../types/request.ts";
 import { formatPrice } from "../../../utils/formatPrice.ts";
-import { toError } from "../../../utils/toError.ts";
 import ProductGrid from "../components/ProductGrid.tsx";
 import StockStatus from "../components/StockStatus.tsx";
 import { CATEGORY_LABELS } from "../filters.ts";
@@ -39,34 +39,16 @@ export default function ProductDetailRoute() {
 }
 
 function ProductDetailPage({ id }: { id: string }) {
-  const [attempt, setAttempt] = useState(0);
-  const [product, setProduct] = useState<RequestState<Product>>(requestState.loading());
-
-  useEffect(() => {
-    // Abort if the user switches product, retries or leaves before the
-    // response arrives, so a slow answer for the *previous* product can
-    // never be written into this page.
-    const controller = new AbortController();
-
-    getProduct(id, { signal: controller.signal })
-      .then((data) => setProduct(requestState.success(data)))
-      .catch((error: unknown) => {
-        if (!isAbortError(error)) setProduct(requestState.error(toError(error)));
-      });
-
-    return () => controller.abort();
-  }, [id, attempt]);
+  // Aborted if the user switches product, retries or leaves before the
+  // response arrives, so a slow answer for the *previous* product can never
+  // be written into this page.
+  const { state: product, retry } = useRequest(id, (signal) => getProduct(id, { signal }));
 
   const notFound =
     product.status === "error" && isApiRequestError(product.error) && product.error.status === 404;
   useDocumentTitle(
     product.status === "success" ? product.data.name : notFound ? "Product not found" : null,
   );
-
-  function retry() {
-    setProduct(requestState.loading());
-    setAttempt((current) => current + 1);
-  }
 
   return (
     <section className="product-detail">
@@ -140,28 +122,14 @@ function ProductDetails({ product }: { product: Product }) {
 /** Top-rated items from the same category: a second request, cancelled the same way. */
 function RelatedProducts({ product }: { product: Product }) {
   const { id, category } = product;
-  const [attempt, setAttempt] = useState(0);
-  const [related, setRelated] = useState<RequestState<Product[]>>(requestState.loading());
   const listSearch = listSearchFrom(useLocation().state);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    getProducts(
+  const { state: related, retry } = useRequest(`related:${category}:${id}`, async (signal) => {
+    const { items } = await getProducts(
       { category, sort: "rating-desc", pageSize: RELATED_COUNT + 1 },
-      { signal: controller.signal },
-    )
-      .then(({ items }) =>
-        setRelated(
-          requestState.success(items.filter((item) => item.id !== id).slice(0, RELATED_COUNT)),
-        ),
-      )
-      .catch((error: unknown) => {
-        if (!isAbortError(error)) setRelated(requestState.error(toError(error)));
-      });
-
-    return () => controller.abort();
-  }, [id, category, attempt]);
+      { signal },
+    );
+    return items.filter((item) => item.id !== id).slice(0, RELATED_COUNT);
+  });
 
   return (
     <section className="related" aria-labelledby="related-heading">
@@ -170,10 +138,7 @@ function RelatedProducts({ product }: { product: Product }) {
       </h3>
       <LoadGate
         state={related}
-        onRetry={() => {
-          setRelated(requestState.loading());
-          setAttempt((current) => current + 1);
-        }}
+        onRetry={retry}
         subject="related products"
         loading={
           <LoadingState label="Loading related products…" variant="grid" count={RELATED_COUNT} />
