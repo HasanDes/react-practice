@@ -317,3 +317,72 @@ The bugs feature, `LoadGate`'s bug-specific copy and `src/api/bugs.ts` are gone.
 ### Contract extension used
 
 The in-stock filter uses the `inStock=true` extension added in D1-2. Filtering client-side would have broken `total` and pagination.
+
+---
+
+## D2-3: UI states
+
+### One component per state, one gate for all pages
+
+- **Used:** `src/components/states.tsx` provides `LoadingState`, `EmptyState` and `ErrorState`, all built on one internal `StateCard` (icon, title, description, actions). `LoadGate` maps a `RequestState` to exactly one of loading, error, empty or success, and both pages go through it.
+- **Considered:** each page rendering its own `<p>Loading…</p>` and error box (what D2-1 had). It works, but pages drift apart: different wording, button labels, focus behavior.
+- **Why:** "looks consistent across pages" is then a property of the code, not of discipline. A test renders the list and details error states and asserts the **same structure** (classes, icon, title, buttons).
+
+### "Empty" is derived, not a fifth status
+
+- **Used:** `LoadGate` takes `isEmpty(data)` + `empty`. `RequestState` stays `idle | loading | success | error`.
+- **Why:** an empty result _is_ a successful response (`{ items: [], total: 0 }`). Storing "empty" separately would duplicate what the data already says. Deriving it keeps the D1-3 union honest.
+- **Empty states always offer a way forward:** "Clear filters" for no matches, "Go to page 1" for an out-of-range page, "Back to products" for a missing product.
+
+### 404 is "not found", not an error
+
+- **Used:** the details page passes `renderError` and shows an `EmptyState` ("Product not found" + Back to products) for 404. Every other error falls through to `ErrorState`.
+- **Why:** retrying can't make a missing product appear, so "Try again" would be a dead end. It's a neutral state, not a red error.
+
+### Error copy by failure kind, never the raw message
+
+- **Used:** `describeLoadError(error, subject)` in `src/utils/describeError.ts` branches on the `ApiRequestError` kind and status from D1-4:
+
+  | Kind                          | Title                      |
+  | ----------------------------- | -------------------------- |
+  | `network`                     | "You seem to be offline"   |
+  | `timeout`                     | "This is taking too long"  |
+  | 5xx                           | "Our server hit a problem" |
+  | `invalid-response` and others | "Something went wrong"     |
+
+  Each title is followed by "We couldn't load {subject}." and next-step advice.
+
+- **Why:** the user can act on "check your connection", but not on "HTTP 500". The server's `message` is for logs (D4-7). A unit test asserts no kind leaks it. I first used "Something went wrong on our side" for 5xx, which nearly duplicated the mock's own message and made the "raw message never shown" test meaningless, so I reworded it.
+- D3-4 extends this for 400 (form fields), 401 (sign out) and 409 (out of stock).
+
+### Loading: skeletons, not spinners
+
+- **Used:** grid and details skeletons in the same shapes as the real content (`aria-hidden`), plus a visually hidden `role="status"` label ("Loading products…"). The content region gets `aria-busy`. The shimmer animation turns off under `prefers-reduced-motion`.
+- **Why:** the layout doesn't jump when data arrives (a CLS win for D4-2). Screen readers hear a short text instead of 8 empty boxes.
+- **Skipped:** a delay before showing skeletons (to avoid a flash on fast loads). With the mock's 300–600 ms latency there's no flash to avoid. I'd add it if a real backend answers in under ~150 ms.
+
+### Retry keeps focus in place
+
+- **Used:** `LoadGate` wraps its content in a focusable region (`tabIndex={-1}`). "Try again" calls the retry and moves focus to that region.
+- **Why:** the button disappears the moment loading starts. Without this, keyboard focus falls back to `<body>`, and screen reader users are sent to the top of the page. Focus then moves on naturally (on the details page, to the loaded product's heading).
+
+### Triggering every state on purpose
+
+| State        | How                                                                                                                                                                    |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Loading      | QA panel "Loading (slow 4s)" or `bazaarMock.latency(4000)`                                                                                                             |
+| Server error | QA panel "Server error (500)" or `bazaarMock.fail(route, 500)`                                                                                                         |
+| Offline      | QA panel "Offline" or `bazaarMock.fail(route, "network")`: **new** mock mode that drops the connection (`HttpResponse.error()`), so `fetch` rejects like a real outage |
+| Empty        | QA panel "Empty results" or `/?search=no-such-product`                                                                                                                 |
+| Not found    | QA panel "Not found (404)" or `/products/p-9999`                                                                                                                       |
+| Recover      | QA panel "Stop errors", then the page's **Try again**                                                                                                                  |
+
+- **QA panel** (`src/dev/QaPanel.tsx`): a collapsible corner panel, shown only while the mock API is on and lazy-loaded into its own chunk (confirmed in the build output). It uses the global `window.bazaarMock` console API, so it doesn't import mock code, and the D1-4 lint boundary still holds.
+
+### A hard bug: StrictMode used up the forced error
+
+- **Symptom:** in the browser, "fail the next request" (`{ once: true }`) often did nothing, and the page loaded normally. The tests passed, because they don't render in StrictMode.
+- **Cause:** React StrictMode (development only) mounts effects twice. The first request is aborted immediately, but it **still reaches the mock** and consumes the one-shot failure, so the real request succeeds. Which request "won" depended on random latency jitter, so it looked flaky.
+- **First idea, disproved:** check `request.signal.aborted` in the mock and skip cancelled requests. I tested it in the browser: **the Service Worker doesn't forward aborts to the handler**, so the signal is never aborted there. I removed the check rather than leave code that only _looks_ like it works.
+- **Fix:** the QA panel uses **persistent** failures plus an explicit "Stop errors" step. That's deterministic in every environment: trigger, see the error, stop, then Try again shows recovery (verified in Edge). One-shot failures remain for Node tests and console use, with the caveat documented in `docs/api-contract.md`.
+- **Lesson:** tests in jsdom don't exercise StrictMode or a real Service Worker. The browser check caught what 86 passing tests didn't.

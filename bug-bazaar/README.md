@@ -6,7 +6,7 @@ A small React + TypeScript (strict) store that sells developer gear: rubber duck
 - **Dev → QA workflow:** [docs/workflow.md](docs/workflow.md)
 - **Decisions log:** [docs/decisions.md](docs/decisions.md) (updated every task)
 
-> **Current status: Day 2 in progress. D2-1 and D2-2 done.** A keyboard-accessible product grid with a details page, plus **search, category, in-stock and sort filters stored in the URL**, so they survive a refresh, links reproduce the view, and Back works. UI states (D2-3) come next.
+> **Current status: Day 2 in progress. D2-1 to D2-3 done.** Product grid and details page, URL-based filters, and **consistent loading / empty / error / not-found states with retry**. Every state can be triggered from the QA panel. Effect cleanup (D2-4) comes next.
 
 ---
 
@@ -106,7 +106,9 @@ bug-bazaar/
 │   │   ├── App.tsx
 │   │   └── NotFoundPage.tsx
 │   ├── components/               # Shared, feature-agnostic UI
-│   │   └── LoadGate.tsx          # Renders loading/error/success from a RequestState
+│   │   ├── LoadGate.tsx          # RequestState → loading / error / empty / success
+│   │   └── states.tsx            # LoadingState (skeletons), EmptyState, ErrorState
+│   ├── dev/QaPanel.tsx           # QA panel: trigger any UI state (mock only, lazy chunk)
 │   ├── features/                 # One folder per feature: its pages + components
 │   │   └── products/
 │   │       ├── components/       # Presentational: ProductFilters, ProductGrid, ProductCard, StockStatus, Pagination
@@ -127,6 +129,7 @@ bug-bazaar/
 │   │   └── global.css
 │   ├── test/setup.ts             # Test setup (DOM matchers, cleanup)
 │   ├── utils/
+│   │   ├── describeError.ts      # Error kind → friendly copy (never raw messages)
 │   │   ├── formatPrice.ts        # Cents → "$19.99" (the only place)
 │   │   └── toError.ts
 │   ├── vite-env.d.ts             # Typed import.meta.env
@@ -188,11 +191,13 @@ There's no real backend. [MSW](https://mswjs.io/) intercepts `fetch` calls in th
 
 - **Demo login:** `dev@bugbazaar.test` / `rubberduck`
 - **Data:** 5,000 deterministic products (`p-0001` … `p-5000`). Stock changes, sessions and orders persist across reloads.
-- **Trigger any state** from the browser console:
+- **QA panel:** a "QA: trigger states" button in the bottom-right corner puts the current page into loading, server error, offline, empty or not-found, then recovers. It's the quickest way to demo D2-3.
+- **Or trigger any state** from the browser console:
 
 ```js
 bazaarMock.help(); // routes, statuses, commands
 bazaarMock.fail("products:list", 500); // force an error (persists until cleared)
+bazaarMock.fail("products:get", "network"); // simulate a dropped connection (offline)
 bazaarMock.fail("orders:create", 409, { once: true }); // fail only the next request
 bazaarMock.clear(); // stop forcing errors
 bazaarMock.latency(2000); // slow + out-of-order responses
@@ -202,14 +207,14 @@ bazaarMock.reset(); // wipe orders, sessions, stock changes
 
 ## Week plan and progress
 
-| Day | Theme      | Tasks                                                                                                                     | Pts | Status |
-| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------- | --- | ------ |
-| 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                                    | —   | ✅     |
-| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer ✅                                     | 15  | ✅     |
-| 2   | Browse     | D2-1 Product list ✅ · D2-2 Filters ✅ · D2-3 UI states · D2-4 Effects cleanup · D2-5 Custom hooks · D2-6 Race conditions | 21  | 🟡     |
-| 3   | Buy        | D3-1 Redux Toolkit · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching                                           | 21  | ⬜     |
-| 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring      | 22  | ⬜     |
-| 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission                             | 21  | ⬜     |
+| Day | Theme      | Tasks                                                                                                                        | Pts | Status |
+| --- | ---------- | ---------------------------------------------------------------------------------------------------------------------------- | --- | ------ |
+| 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                                       | —   | ✅     |
+| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer ✅                                        | 15  | ✅     |
+| 2   | Browse     | D2-1 Product list ✅ · D2-2 Filters ✅ · D2-3 UI states ✅ · D2-4 Effects cleanup · D2-5 Custom hooks · D2-6 Race conditions | 21  | 🟡     |
+| 3   | Buy        | D3-1 Redux Toolkit · D3-2 Cart · D3-3 Auth · D3-4 Backend errors · D3-5 Caching                                              | 21  | ⬜     |
+| 4   | Harden     | D4-1 A11y · D4-2 Performance · D4-3 Memo/virtualization · D4-4 Live stock · D4-5 Testing · D4-6 CI · D4-7 Monitoring         | 22  | ⬜     |
+| 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission                                | 21  | ⬜     |
 
 Days 1 to 3 produce the working store and come first if time runs short.
 

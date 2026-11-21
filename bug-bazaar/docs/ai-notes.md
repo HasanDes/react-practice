@@ -13,3 +13,12 @@ Log of notable AI use during the Bug Bazaar week (required by D5-7: three AI use
 - **How it was caught:** the D1-3 TypeScript migration. `tsc` reported `'onUnhandledRequest' does not exist in type 'StartOptions'`.
 - **Impact:** the tests' safety net (fail on any request without a handler) had never been active, and the browser logged warnings instead of quietly bypassing Vite's asset requests.
 - **Lesson:** AI suggestions reflect whatever version of a library was most common in its training data, not necessarily the installed one. Check new-major APIs against the installed package (`node_modules/<pkg>/README.md` or its types). Strict types are a cheap way to catch this whole class of mistake.
+
+---
+
+## AI mistake: assuming aborts reach the mock (D2-3)
+
+- **What happened:** the QA panel's "fail the next request" didn't work in the browser. The AI correctly diagnosed React StrictMode's double request using up the one-shot failure. But its first fix (skip requests whose `request.signal.aborted` is true) **assumed** the abort would reach the MSW handler.
+- **How it was caught:** not by tests (jsdom has no StrictMode and no Service Worker), but by driving real headless Edge and reading the screenshots. The error state never showed up. A targeted probe (abort a request, then check whether the forced failure was still armed) proved that the Service Worker doesn't forward aborts.
+- **What changed:** the speculative check was removed, and the panel switched to persistent failures with an explicit "Stop errors" step, which is deterministic everywhere.
+- **Lesson:** "the tests pass" isn't "it works". Check behavior that depends on the runtime (StrictMode, Service Workers, real browser history) in a real browser, and test assumptions with a probe instead of coding around them.
