@@ -1312,3 +1312,22 @@ Full write-up: [glossary.md](glossary.md).
 - **Examples are real, not hypothetical:** the mock's 300 ms latency and jitter, the checkout `Idempotency-Key`, bearer tokens and a browser-side cart (why the API can scale out), Vite's hashed file names, `forgetProducts` and the 30 s / 5 min expiry, and stock converging from cache, feed and the 409.
 - **Honesty over neatness:** the eventual consistency entry includes a counter-example from this codebase. Two tabs' carts never converge (last write wins on reload), which is _not_ eventual consistency. The fix is named: listen for the `storage` event.
 - **Considered:** one example per term, from anywhere. Tying each term to this store makes it something I've built and can defend, not a definition I memorized.
+
+---
+
+## D5-7: AI workflow and AI notes
+
+Full write-up: [ai-notes.md](ai-notes.md).
+
+- **Used:** a write-up at the top of `ai-notes.md`, with the week's log kept below it, unedited:
+  - **How I worked with AI:** one task per prompt, the gates every change had to pass, and the decisions kept by a person.
+  - **Three AI uses:** auth (D3-3), virtualization (D4-3) and CI (D4-6). Each gives the prompt, what the AI produced, what was kept, and what was changed and why.
+  - **The one mistake** I learned most from: the refactor that blinded two tests.
+  - **One thing I wouldn't hand to AI:** signing off on security-sensitive code and repository permissions.
+- **Why these three uses:** they show different kinds of change.
+  - **D3-3:** security details that looked right but weren't.
+  - **D4-3:** a product question the AI rightly asked instead of guessing, and an optimization that had to be measured to be found useless.
+  - **D4-6:** a requirement that can't be met by code at all, only by a permission.
+- **Why that mistake:** every check was green, and the broken line wasn't even in the diff. It's the kind of mistake that survives review, and it changed how I check refactors.
+- **Accuracy:** each claim was checked against the log and the docs. One draft claim, that the stale-401 handling was a fix, had no record behind it. It was part of the design from the start, so it moved to "kept".
+- **Considered:** rewriting the log into the three uses. Rejected: entries written when the mistake was found are more honest than a summary written at the end, so both stay.
