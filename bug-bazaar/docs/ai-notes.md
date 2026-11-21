@@ -88,3 +88,12 @@ Log of notable AI use during the Bug Bazaar week (required by D5-7: three AI use
 - **How it was caught:** the D4-5 audit, which looked specifically for `querySelector`, classes and other markup-coupled queries in tests.
 - **What changed:** the helper selects the page heading by meaning (`main h1`), and each test also asserts the recorder saw the _current_ product, so an empty recording fails. Mutation-checked against broken race safety, old version vs new.
 - **Lesson:** negative assertions ("never", "not even briefly", "no request") need a positive control proving the observation works. And after any markup change, search tests for the old markup, not just for failures.
+
+---
+
+## AI mistake: deduplicating by error object, when React makes new ones (D4-7)
+
+- **What happened:** the AI deduplicated error reports by error object, assuming that when React 18 (in development) also sends a boundary-caught error to `window.onerror`, it's the same object. It isn't. React retries a failed render, StrictMode renders twice, and each attempt throws a **new** error. One crash produced three reports: one `render`, two bogus `uncaught`.
+- **How it was caught:** a test written to mimic a real bug, a component that throws a new `TypeError` on every render, instead of re-throwing one shared error. It failed with three reports where one was expected.
+- **What changed:** the window handler waits one task, then also drops an error with the same name and message as a `render` report from the last second. Two tests cover it: drop the retries, and keep a different error. A real browser confirmed one report in both builds. In development React raised the error to `window` four times, and production React not at all.
+- **Lesson:** test doubles should behave like the real failure. A test that throws one shared error object would have passed, and the bug would only have shown up as a noisy log in development.

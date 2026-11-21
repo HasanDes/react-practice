@@ -6,7 +6,7 @@ A small React + TypeScript (strict) store that sells developer gear: rubber duck
 - **Dev → QA workflow:** [docs/workflow.md](docs/workflow.md)
 - **Decisions log:** [docs/decisions.md](docs/decisions.md) (updated every task)
 
-> **Current status: Day 4 in progress. Days 1–3 complete; D4-1 to D4-6 done.** Browse, filter and add to cart; **edit the cart** (stock-capped), which **survives a reload**; **sign in** (demo: `dev@bugbazaar.test` / `rubberduck`) and come back to where you were; **check out** with idempotent retries and 409 handling; see the order confirmation with live status. Checkout and the account page are protected, and an expired session sends you to sign in without losing the cart. Every API error is handled one way: field errors, sign-in, a Not Found page, named out-of-stock items, or Try again, and never the server's raw text. Catalog pages are cached: revisits and list → details are instant, and stock is refetched for whatever you just bought. Keyboard and screen-reader friendly: Lighthouse accessibility 100 on home, cart and login. Product cards appear 20% sooner on a cold visit, and an **All** view scrolls through all 5,000 products smoothly with only about 40 cards in the DOM ([docs/performance.md](docs/performance.md)). **Stock updates live** over a WebSocket, recovers by itself after a disconnect, and closes when no product is on screen. **291 tests** (behavior-focused, mutation-checked, 97.7% line coverage; see [docs/testing.md](docs/testing.md)). Every pull request is checked by GitHub Actions (lint, types, tests, build, accessibility), and `develop` deploys to GitHub Pages ([docs/ci.md](docs/ci.md)).
+> **Current status: Days 1–4 complete; Day 5 (docs, review, submission) next.** Browse, filter and add to cart; **edit the cart** (stock-capped), which **survives a reload**; **sign in** (demo: `dev@bugbazaar.test` / `rubberduck`) and come back to where you were; **check out** with idempotent retries and 409 handling; see the order confirmation with live status. Checkout and the account page are protected, and an expired session sends you to sign in without losing the cart. Every API error is handled one way: field errors, sign-in, a Not Found page, named out-of-stock items, or Try again, and never the server's raw text. Catalog pages are cached: revisits and list → details are instant, and stock is refetched for whatever you just bought. Keyboard and screen-reader friendly: Lighthouse accessibility 100 on home, cart and login. Product cards appear 20% sooner on a cold visit, and an **All** view scrolls through all 5,000 products smoothly with only about 40 cards in the DOM ([docs/performance.md](docs/performance.md)). **Stock updates live** over a WebSocket, recovers by itself after a disconnect, and closes when no product is on screen. **307 tests** (behavior-focused, mutation-checked, 97.7% line coverage; see [docs/testing.md](docs/testing.md)). Every pull request is checked by GitHub Actions (lint, types, tests, build, accessibility), and `develop` deploys to GitHub Pages ([docs/ci.md](docs/ci.md)). A crash shows a fallback screen instead of a blank page, and every unexpected error is logged ([docs/monitoring.md](docs/monitoring.md)).
 
 ---
 
@@ -223,14 +223,14 @@ bazaarMock.reset(); // wipe orders, sessions, stock changes
 
 ## Week plan and progress
 
-| Day | Theme      | Tasks                                                                                                                                  | Pts | Status |
-| --- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------- | --- | ------ |
-| 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                                                 | —   | ✅     |
-| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer ✅                                                  | 15  | ✅     |
-| 2   | Browse     | D2-1 Product list ✅ · D2-2 Filters ✅ · D2-3 UI states ✅ · D2-4 Effects cleanup ✅ · D2-5 Custom hooks ✅ · D2-6 Race conditions ✅  | 21  | ✅     |
-| 3   | Buy        | D3-1 Redux Toolkit ✅ · D3-2 Cart ✅ · D3-3 Auth ✅ · D3-4 Backend errors ✅ · D3-5 Caching ✅                                         | 21  | ✅     |
-| 4   | Harden     | D4-1 A11y ✅ · D4-2 Performance ✅ · D4-3 Memo/virtualization ✅ · D4-4 Live stock ✅ · D4-5 Testing ✅ · D4-6 CI ✅ · D4-7 Monitoring | 22  | 🟡     |
-| 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission                                          | 21  | ⬜     |
+| Day | Theme      | Tasks                                                                                                                                     | Pts | Status |
+| --- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --- | ------ |
+| 0   | Rename     | Rename to The Bug Bazaar, keep history                                                                                                    | —   | ✅     |
+| 1   | Foundation | D1-1 Setup ✅ · D1-2 API contract + mock ✅ · D1-3 TypeScript ✅ · D1-4 Data layer ✅                                                     | 15  | ✅     |
+| 2   | Browse     | D2-1 Product list ✅ · D2-2 Filters ✅ · D2-3 UI states ✅ · D2-4 Effects cleanup ✅ · D2-5 Custom hooks ✅ · D2-6 Race conditions ✅     | 21  | ✅     |
+| 3   | Buy        | D3-1 Redux Toolkit ✅ · D3-2 Cart ✅ · D3-3 Auth ✅ · D3-4 Backend errors ✅ · D3-5 Caching ✅                                            | 21  | ✅     |
+| 4   | Harden     | D4-1 A11y ✅ · D4-2 Performance ✅ · D4-3 Memo/virtualization ✅ · D4-4 Live stock ✅ · D4-5 Testing ✅ · D4-6 CI ✅ · D4-7 Monitoring ✅ | 22  | ✅     |
+| 5   | Explain    | D5-1…D5-9 Architecture, patterns, orders, glossary, reviews, AI notes, reflection, submission                                             | 21  | ⬜     |
 
 Days 1 to 3 produce the working store and come first if time runs short.
 

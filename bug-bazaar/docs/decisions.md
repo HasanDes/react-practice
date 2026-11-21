@@ -1203,3 +1203,42 @@ Full write-up: [ci.md](ci.md).
 
 - **Stale preview servers:** a preview server left over from an earlier run held the port, so a check silently ran against the wrong build ("Page not found", a Service Worker at the root). Fixed by stopping leftovers and using a fresh port. Browser checks should use unique ports, and confirm the served build before trusting results.
 - **Git Bash path rewriting:** it turned `/react-practice/` into a Windows path. Locally that needs `MSYS_NO_PATHCONV=1`; CI on Linux is unaffected (noted in ci.md).
+
+---
+
+## D4-7: Monitoring
+
+Full write-up: [monitoring.md](monitoring.md).
+
+### Error boundaries at two levels
+
+- **Used:** one boundary around the page (inside `<main>`, so the header, account and cart links keep working), and a last-resort one around the whole app in `main.tsx`.
+  - The page boundary resets when the path changes, so navigating away from a broken page shows the new page. It also resets on **Try again**.
+  - The app-level one renders above the store and router, so its fallback uses neither. A reload is the way out.
+- **Why:** a crash in one product card shouldn't take the cart link with it, and nothing should ever end in a blank page.
+- **Considered:**
+  - **The `react-error-boundary` library:** it does the same in about 60 lines of ours. Not worth a dependency.
+  - **One boundary per route:** finer-grained, but every route renders inside the same `<main>`, so one boundary there covers them all with the same result.
+  - **Boundaries per widget,** e.g. per product card: worth it only once a widget is known to be fragile. A broken card usually means the whole list's data is broken.
+- **Fallback copy:** our own words and a reference id, never the error's message (the D3-4 rule). Focus moves to the fallback's heading, because the element that had focus is gone.
+
+### A monitor with a swappable transport
+
+- **Used:** `createMonitor({ transport })`. A report holds source, name, message, stacks, the page path, time and build mode. It's kept in a 50-entry buffer (`bazaarMonitoring.reports()`) and sent to the console.
+- **Why not a real service yet:** the app has no backend, and a demo shouldn't ship users' errors to a third party. Swapping the transport is the only change needed.
+- **Privacy:** the path only, without the query string, and no token, email or cart.
+- **Robustness:** the same error object is reported once, and a transport that throws is ignored.
+
+### Global handlers for what boundaries can't catch
+
+- **Used:** window `error` and `unhandledrejection` listeners, installed first thing in `main.tsx`. These errors don't break rendering, so they're logged without changing the screen.
+- **Considered:** showing the fallback for them too. Rejected: the page is still fine, and replacing it would turn a harmless failure into a visible one.
+- **React 18 development duplicates:** one crash logged three times in development. React sends caught errors to `window.onerror` once per render attempt, each attempt with a new error object. The window handler now waits one task and drops errors the boundary just reported (same name and message, within one second). Production React doesn't do this. Both builds were checked in a browser.
+
+### QA triggers
+
+- **Used:** three QA panel buttons, plus `bazaarMonitoring.crashPage()`:
+  - **Crash this page:** a component inside the page boundary throws while the crash test is armed. It stays armed until the boundary resets, because React re-renders once after an error and disarming earlier would let that retry succeed.
+  - **Throw in a click handler.**
+  - **Unhandled promise rejection.**
+- **Exposure:** the crash trigger only exists while the mock API is on. The read-only `reports()` is always available.
