@@ -1118,3 +1118,42 @@ Protocol: [api-contract.md](api-contract.md#websocket-apistock-live-stock-d4-4).
 
 - **The feed captured `WebSocket` too early** (AI mistake, in ai-notes.md). It was a default parameter evaluated when the feed was created in `main.tsx`, before the mock replaced the global. The feed kept dialing the real network and never reached the mock. Unit tests with an injected fake couldn't see it; the browser check did. It's now looked up at connect time, with a regression test.
 - **Two status bugs** found by the unit tests: "back online" reported `connecting` (hiding the reconnecting note mid-recovery), and `pagehide` left the status as `live`. Both fixed.
+
+---
+
+## D4-5: Testing
+
+Full write-up: [testing.md](testing.md).
+
+### Approach: audit what exists, against the requirement
+
+- **Starting point:** 286 tests already existed, written alongside each feature. D4-5 became an **audit**: does each required area (cart logic, hooks, login, filtering, checkout with a success and a 409) have meaningful tests? Are they about behavior? Can they fail? Are they stable enough to gate merges?
+- **Principles kept:**
+  - the real app, store and API client, with only the network mocked (MSW, the same mock backend as the browser)
+  - no `vi.mock`
+  - queries by role, label and text
+  - user-event for interactions
+  - assertions on outcomes
+- **Considered:**
+  - Mocking modules (for example, the API module) in component tests: faster to write, but the test then checks the mock, not the request, status, validation and abort handling that run in production.
+  - Snapshot tests: they fail on any markup change, behavioral or not, and get updated without reading.
+  - React Testing Library's `container.querySelector`: it couples tests to markup. Kept only where markup _is_ the subject.
+
+### Found and fixed
+
+- **Two race tests had been vacuous since D4-1.** A heading recorder used `h2.page-heading`, and page headings became `<h1>`, so "the old product never appeared, not even briefly" checked nothing. Fixed (select `main h1`), with a sanity assertion that the recorder saw the current product. Mutation-verified: the old version only caught a stale product that _stays_; the new one catches the flash it claims to.
+- **Implementation details replaced:**
+  - The cart count is read from the link's accessible name (`src/test/queries.ts`), and the badge's test id was removed.
+  - "Not an error" is asserted as no alert role instead of a CSS class.
+  - "Outdated results" is asserted through `aria-busy` instead of a class.
+- **Gaps:**
+  - a full purchase journey test
+  - pagination, including a stale page link
+  - the WebSocket URL builder
+  - dismissing a live-stock notice
+
+### Coverage and stability
+
+- **Used:** `@vitest/coverage-v8` (`npm run test:coverage`), app code only. 96.8% → **97.7%** lines, 91.4% → **91.9%** branches.
+- **No coverage threshold in CI:** the vacuous race tests executed every line they "covered". Coverage finds what's untested; mutation testing shows what's _checked_. A threshold would reward executing code, not checking it. A floor may still be worth adding later as a tripwire against big untested additions.
+- **Stability before D4-6:** 5 consecutive full runs green (about 10.7 s each), and 2 runs with 2 workers (about 27.5 s, like a small CI machine).

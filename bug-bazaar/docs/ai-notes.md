@@ -78,3 +78,13 @@ Log of notable AI use during the Bug Bazaar week (required by D5-7: three AI use
 - **How it was caught:** the real-browser check showed 0 connections. A probe that opened a WebSocket by hand _did_ connect, which pointed at _when_ the constructor was taken, not _whether_ interception worked.
 - **What changed:** the class is looked up when connecting (`WebSocketImpl ?? globalThis.WebSocket`), and a regression test installs the WebSocket class _after_ creating the feed.
 - **Lesson:** default parameters and module-level references freeze globals at evaluation time. Anything that may be replaced later (mocks, monitoring wrappers, polyfills) should be read at the moment it's used. And when every test injects a dependency, the default path is untested: keep one test that exercises it.
+
+---
+
+## AI mistake: a refactor that silently blinded two tests (D4-1 → caught in D4-5)
+
+- **What happened:** in D4-1 the AI changed every page heading from `<h2>` to `<h1>` and updated every test that _failed_ as a result. Two race-condition tests didn't fail. Their helper recorded headings with `document.querySelectorAll("h2.page-heading")`, which now matched nothing, so the assertion "the previous product was never shown, not even briefly" was checking an always-empty set.
+- **Why it slipped through:** a refactor is usually checked by "the tests still pass", but a test that queries by tag and CSS class can lose its target **and still pass**. Nothing goes red when a negative assertion ("X never appeared") watches nothing.
+- **How it was caught:** the D4-5 audit, which looked specifically for `querySelector`, classes and other markup-coupled queries in tests.
+- **What changed:** the helper selects the page heading by meaning (`main h1`), and each test also asserts the recorder saw the _current_ product, so an empty recording fails. Mutation-checked against broken race safety, old version vs new.
+- **Lesson:** negative assertions ("never", "not even briefly", "no request") need a positive control proving the observation works. And after any markup change, search tests for the old markup, not just for failures.
