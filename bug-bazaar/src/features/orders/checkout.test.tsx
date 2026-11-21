@@ -261,6 +261,43 @@ describe("checkout", () => {
     expect(await screen.findByTestId("order-id")).toHaveTextContent("o-00001");
   });
 
+  it("409, but the stock is back by the time we check: says so, and leaves the cart alone", async () => {
+    // Found rehearsing the D5-9 walkthrough: the page said "only has 10 left,
+    // so we lowered the quantity" while the cart still held 2. Between the
+    // server's 409 and our refetch, stock can come back (a restock, or
+    // another shopper's failed order releasing its reservation).
+    db.setStock("p-0001", 10);
+    server.use(
+      http.post(
+        "*/api/orders",
+        () =>
+          HttpResponse.json(
+            {
+              error: {
+                code: "OUT_OF_STOCK",
+                message: "Not enough stock.",
+                details: { "p-0001": "only 0 left" },
+              },
+            },
+            { status: 409 },
+          ),
+        { once: true },
+      ),
+    );
+    const { user } = renderAt("/checkout", signedInStore());
+    addToCart("p-0001", 2);
+
+    await user.click(screen.getByRole("button", { name: "Place order" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Stock changed while you were checking out");
+    expect(alert).toHaveTextContent(`${product("p-0001").name} is available again`);
+    expect(alert).not.toHaveTextContent("lowered");
+    expect(badge()).toBe("2");
+
+    await user.click(screen.getByRole("button", { name: "Place order" }));
+    expect(await screen.findByTestId("order-id")).toHaveTextContent("o-00001");
+  });
+
   it("a retry after a lost response returns the original order, never a second one", async () => {
     db.setStock("p-0001", 10);
     // The server commits the order, but the response never reaches the browser.

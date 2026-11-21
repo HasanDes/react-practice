@@ -129,10 +129,17 @@ export default function CheckoutPage() {
 
 function ProblemMessage({ problem }: { problem: CheckoutProblem }) {
   switch (problem.kind) {
-    case "out-of-stock":
+    case "out-of-stock": {
+      // Stock can come back between the 409 and our refetch (a restock, or a
+      // failed order releasing its reservation): then nothing in the cart changed.
+      const allBack = problem.items.every((item) => item.available >= item.requested);
       return (
         <div role="alert" className="checkout__problem">
-          <p className="checkout__problem-title">Some items ran out while you were shopping</p>
+          <p className="checkout__problem-title">
+            {allBack
+              ? "Stock changed while you were checking out"
+              : "Some items ran out while you were shopping"}
+          </p>
           <ul>
             {problem.items.map((item) => (
               <li key={item.productId}>
@@ -140,10 +147,14 @@ function ProblemMessage({ problem }: { problem: CheckoutProblem }) {
                   <>
                     <strong>{item.name}</strong> just sold out and was removed from your cart.
                   </>
-                ) : (
+                ) : item.available < item.requested ? (
                   <>
                     <strong>{item.name}</strong> only has {item.available} left, so we lowered the
                     quantity in your cart.
+                  </>
+                ) : (
+                  <>
+                    <strong>{item.name}</strong> is available again. Your quantity is unchanged.
                   </>
                 )}
               </li>
@@ -152,6 +163,7 @@ function ProblemMessage({ problem }: { problem: CheckoutProblem }) {
           <p>Check your order below, then place it again.</p>
         </div>
       );
+    }
     case "session-expired":
       return (
         <div role="alert" className="checkout__problem">

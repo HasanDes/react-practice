@@ -8,7 +8,14 @@ import type { CreateOrderResponse } from "../../types/api.ts";
 import type { CartItem } from "../cart/cartSlice.ts";
 import { forgetProducts } from "../products/catalogCache.ts";
 
-export type OutOfStockItem = { productId: string; name: string; available: number };
+export type OutOfStockItem = {
+  productId: string;
+  name: string;
+  /** Stock right now, fetched after the 409. */
+  available: number;
+  /** What the cart asked for. Stock can be back to this by the time we check. */
+  requested: number;
+};
 
 export type CheckoutProblem =
   /** 409: some items no longer have enough stock. Names each one (D3-2). */
@@ -97,6 +104,7 @@ async function outOfStock(
         productId: line.productId,
         name: line.name,
         available: fresh.find((entry) => entry.productId === line.productId)?.stock ?? 0,
+        requested: line.quantity,
       })),
     },
     freshStock: fresh,
