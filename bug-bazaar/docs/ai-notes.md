@@ -68,3 +68,13 @@ Log of notable AI use during the Bug Bazaar week (required by D5-7: three AI use
 - **How it was caught:** the headless-browser check (Back from product #1996 landed at the top), then a frame-by-frame probe of `scrollY` and sessionStorage, then reading the library source for the attach-time scroll.
 - **What changed:** save in a layout-effect cleanup (it runs before the list's DOM is removed), and restore through the virtualizer's `initialOffset` option. Verified: Back from #2001 returns to #1996.
 - **Lesson:** jsdom has no layout or scrolling, so these bugs can't exist there. Behavior that depends on layout timing needs a real browser, and when a library owns scrolling, read how it behaves on mount before fighting it.
+
+---
+
+## AI mistake: a global captured too early (D4-4)
+
+- **What happened:** the AI wrote the live stock client with `WebSocketImpl = WebSocket` as a default parameter, which is evaluated **when the feed is created**. `main.tsx` creates the feed at startup, _before_ the mock backend starts and replaces the global `WebSocket` with its interceptor. The feed kept the original constructor, dialed the real network (where no stock server exists), and retried forever. The page sat on "Live stock paused, reconnecting…".
+- **Why the tests didn't catch it:** every unit test injected a fake WebSocket class, so the default was never used.
+- **How it was caught:** the real-browser check showed 0 connections. A probe that opened a WebSocket by hand _did_ connect, which pointed at _when_ the constructor was taken, not _whether_ interception worked.
+- **What changed:** the class is looked up when connecting (`WebSocketImpl ?? globalThis.WebSocket`), and a regression test installs the WebSocket class _after_ creating the feed.
+- **Lesson:** default parameters and module-level references freeze globals at evaluation time. Anything that may be replaced later (mocks, monitoring wrappers, polyfills) should be read at the moment it's used. And when every test injects a dependency, the default path is untested: keep one test that exercises it.

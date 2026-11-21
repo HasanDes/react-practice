@@ -1032,3 +1032,89 @@ Full measurements: [performance.md](performance.md#d4-3-memoization-and-virtuali
 - **Mine (AI):** the object prop that silently disabled `React.memo`. It was caught by counting renders, not by reading. Logged in ai-notes.md.
 - **Mine (AI):** two scroll-restore bugs (a passive-effect save after the page swap, and the virtualizer overriding `scrollTo`). Caught by the browser check, fixed, and re-verified.
 - **In my browser script:** it triggered Back twice, which first looked like "filters drop the view" and "restore fails". I checked the script before changing app code.
+
+---
+
+## D4-4: WebSockets (live stock)
+
+Protocol: [api-contract.md](api-contract.md#websocket-apistock-live-stock-d4-4).
+
+### Transport: WebSocket, compared with SSE and polling
+
+|                           | **WebSocket** ✅                                     | Server-sent events (SSE)                                       | Polling                                   |
+| ------------------------- | ---------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------- |
+| Direction                 | Both ways over one connection                        | Server → client only (client changes need separate HTTP calls) | Client asks on a timer                    |
+| Latency                   | Immediate                                            | Immediate                                                      | Up to the interval                        |
+| Cost when nothing changes | A ping every 10 s                                    | A comment line now and then                                    | A full request every interval, per client |
+| Reconnect                 | Ours to build (backoff, resubscribe)                 | Built into `EventSource` (with `Last-Event-ID`)                | Nothing to reconnect                      |
+| Infrastructure            | Needs proxies and load balancers that allow upgrades | Plain HTTP, but long-lived responses                           | Plain HTTP, cacheable                     |
+
+- **Why WebSocket here:** the client needs to tell the server **what it's looking at** (the subscription changes as you scroll or open a product). WebSocket carries that on the same connection. SSE would need a separate "set my subscription" HTTP call tied to the stream, and polling 24–40 products every few seconds per visitor is mostly wasted requests.
+- **When I'd pick the others:** **SSE** for a one-way feed everyone receives the same way (for example, site-wide announcements). Automatic reconnect and `Last-Event-ID` resume come built in. **Polling** when updates are rare, a few seconds' delay is fine, or the infrastructure can't hold connections open. It's the simplest to operate and to cache.
+- **Mocked with MSW 3's `ws` API:** it replaces the browser's `WebSocket` in the page, so the app opens a real `WebSocket` to `/api/stock`, and tests use the same mock server in Node.
+
+### Recovers after a disconnect
+
+- **Exponential backoff with jitter** (1, 2, 4 … 30 s; each delay is 50–100% of the ceiling), so a server restart isn't hit by every client at the same moment. It resets after a successful connection.
+- **Resubscribe after every reconnect.** The server answers with a **snapshot**, which makes changes missed while disconnected irrelevant: the snapshot is the truth. Simpler than numbering events and replaying the gap, and correct because the client only needs current values, not history.
+- **Heartbeat:** the server pings every 10 s. 25 s of silence means a dead connection (sleeping laptop, Wi-Fi drop) even if the socket never reported closing. Close it and reconnect.
+- **Back online:** the browser's `online` event triggers an immediate reconnect instead of waiting out the backoff.
+- **Shown to the user:** "Live stock paused, reconnecting…" in the header, only while reconnecting.
+
+### Stops when the page closes
+
+- **Subscriptions follow what's on screen:** a reference-counted watch registry. Cards, the details page, the cart and checkout register what they show and unregister on unmount. **Nothing watched → disconnect** (the login and account pages have no socket).
+- **Tab hidden → disconnect**; visible → reconnect, and the snapshot catches up. No updates are processed for a page nobody is looking at.
+- **`pagehide` → disconnect.** An open WebSocket also keeps a page out of the browser's back/forward cache.
+- **`stop()`** closes for good: no socket, no timers, no listeners (tested).
+
+### Where live stock goes
+
+- **A `liveStock` slice** holds the feed's latest number per product. Components show `live ?? fetched`. That's correct while a product is on screen: it's subscribed, every change is pushed, and every (re)subscribe sends a snapshot.
+- **Considered:** writing feed updates into the query cache (D3-5) and component state. Every cached shape (lists, details, related) would need patching, and mounted pages would need a way to hear about it. The overlay is one place and one rule.
+- **Cards:** only the card whose stock changed re-renders (its own selector, plus `React.memo` from D4-3).
+- **Details page:** the stock line is a polite live region (the change is announced), and Add to cart's limit uses the live number.
+- **Cart:** a line whose stock drops below its quantity is lowered, or removed if sold out, using D3-2's `stockRefreshed` rule, so "quantities never exceed stock" still holds. A notice names the item ("… only has 1 left now, so we lowered the quantity in your cart"), because a silent change would look like a bug. The server still has the final word at checkout (409).
+
+### Proving it
+
+- **Unit tests** (`stockFeed.test.ts`, with a fake WebSocket, fake timers and fake page events):
+  - backoff values
+  - connect only when watching, then subscribe
+  - malformed frames ignored
+  - debounced resubscribe
+  - reconnect after 1 s then 2 s, resubscribe, and the snapshot
+  - backoff reset after success
+  - heartbeat timeout
+  - back online
+  - nothing watched, hidden tab, pagehide
+  - `stop()` leaves no timers and no listeners
+- **App tests** (`liveStock.test.tsx`, real app, store and feed against the MSW stock server):
+  - the details page updates live (and is announced)
+  - list cards update
+  - the cart line is lowered with a notice
+  - the server drops, stock changes while nobody's connected, the client reconnects and shows the missed value
+  - leaving product pages closes the connection with no reconnect afterwards
+  - unmounting leaves no connection
+- **Mutation checks**, each caught:
+  - never reconnecting
+  - no resubscribe on reconnect
+  - no heartbeat
+  - backoff not growing
+  - not disconnecting when nothing is watched
+  - a hidden tab keeping the socket
+  - `stop()` leaving listeners
+  - capturing `WebSocket` at creation (the bug below)
+  - the cart ignoring live stock
+- **Real browser** (headless Edge, production build):
+  - 9 → "Only 4 left" live, highlighted, with `aria-live="polite"`
+  - a 2.5 s outage showed the header note; a change made during the outage was caught up after reconnecting ("Only 2 left"), and the note cleared
+  - random sales highlighted cards on the list
+  - the cart line went 3 → 1 with the notice
+  - 0 connections on the login page
+  - no console errors
+
+### Bugs caught
+
+- **The feed captured `WebSocket` too early** (AI mistake, in ai-notes.md). It was a default parameter evaluated when the feed was created in `main.tsx`, before the mock replaced the global. The feed kept dialing the real network and never reached the mock. Unit tests with an injected fake couldn't see it; the browser check did. It's now looked up at connect time, with a regression test.
+- **Two status bugs** found by the unit tests: "back online" reported `connecting` (hiding the reconnecting note mid-recovery), and `pagehide` left the status as `live`. Both fixed.
