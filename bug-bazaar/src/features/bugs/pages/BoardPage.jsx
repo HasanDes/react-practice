@@ -7,9 +7,7 @@ export default function BoardPage({ bugs, onAddBug }) {
 
   // Derived on every render, so it can never go out of sync with bugs or query.
   const normalizedQuery = query.trim().toLowerCase();
-  const visibleBugs = bugs.filter((bug) =>
-    bug.title.toLowerCase().includes(normalizedQuery)
-  );
+  const visibleBugs = bugs.filter((bug) => bug.title.toLowerCase().includes(normalizedQuery));
 
   return (
     <>
@@ -17,11 +15,7 @@ export default function BoardPage({ bugs, onAddBug }) {
       <h2>Bugs</h2>
       <label className="search">
         Search by title
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
+        <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
       </label>
       <BugList bugs={visibleBugs} />
     </>

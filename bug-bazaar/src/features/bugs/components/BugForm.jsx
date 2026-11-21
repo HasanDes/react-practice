@@ -38,10 +38,7 @@ export default function BugForm({ onAddBug }) {
       </label>
       <label>
         Severity
-        <select
-          value={severity}
-          onChange={(event) => setSeverity(event.target.value)}
-        >
+        <select value={severity} onChange={(event) => setSeverity(event.target.value)}>
           {SEVERITIES.map((option) => (
             <option key={option} value={option}>
               {option}

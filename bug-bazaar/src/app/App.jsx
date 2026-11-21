@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, Route, Routes } from "react-router-dom";
-import { fetchBugs } from "./mockApi.js";
-import LoadGate from "./components/LoadGate.jsx";
-import BoardPage from "./pages/BoardPage.jsx";
-import BugDetailPage from "./pages/BugDetailPage.jsx";
-import NotFoundPage from "./pages/NotFoundPage.jsx";
+import { fetchBugs } from "../mocks/mockApi.js";
+import LoadGate from "../components/LoadGate.jsx";
+import BoardPage from "../features/bugs/pages/BoardPage.jsx";
+import BugDetailPage from "../features/bugs/pages/BugDetailPage.jsx";
+import NotFoundPage from "./NotFoundPage.jsx";
 
 export default function App() {
   const [bugs, setBugs] = useState([]);
