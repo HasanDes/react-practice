@@ -23,3 +23,11 @@ describe("formatPrice", () => {
     expect(formatPrice(10 + 20)).toBe("$0.30");
   });
 });
+
+// ⚠️ D4-6 DEMO ONLY: a deliberately failing test, on the ci-demo/failing-test
+// branch. Its pull request must show CI red and the merge blocked. Never merge.
+describe("CI demo", () => {
+  it("fails on purpose to prove a failing test blocks the merge", () => {
+    expect(formatPrice(1999)).toBe("$19.98"); // wrong on purpose: it's $19.99
+  });
+});
