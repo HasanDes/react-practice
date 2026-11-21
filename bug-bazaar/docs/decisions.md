@@ -386,3 +386,40 @@ The in-stock filter uses the `inStock=true` extension added in D1-2. Filtering c
 - **First idea, disproved:** check `request.signal.aborted` in the mock and skip cancelled requests. I tested it in the browser: **the Service Worker doesn't forward aborts to the handler**, so the signal is never aborted there. I removed the check rather than leave code that only _looks_ like it works.
 - **Fix:** the QA panel uses **persistent** failures plus an explicit "Stop errors" step. That's deterministic in every environment: trigger, see the error, stop, then Try again shows recovery (verified in Edge). One-shot failures remain for Node tests and console use, with the caveat documented in `docs/api-contract.md`.
 - **Lesson:** tests in jsdom don't exercise StrictMode or a real Service Worker. The browser check caught what 86 passing tests didn't.
+
+---
+
+## D2-4: useEffect and cleanup
+
+### Every effect on the details page has a matching cleanup
+
+| Effect                      | Cleanup                                        | Why it matters                                                       |
+| --------------------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
+| Fetch the product           | `AbortController.abort()`                      | A slow response for product A can't be written into product B's page |
+| Fetch related products      | `abort()`                                      | Same, for the second request on the page                             |
+| Document title              | Restore the previous title                     | The tab title never shows a page you've left                         |
+| Back to Top scroll listener | `removeEventListener` + `cancelAnimationFrame` | No listener or pending frame survives the page                       |
+| Focus the heading           | None (one-off, synchronous)                    | Nothing outlives the call                                            |
+
+The table is also at the top of `ProductDetailPage.tsx`, so the code says the same thing.
+
+### Two layers against "wrong product" bugs
+
+- **`key={id}` on the page:** navigating from A to B unmounts A's component and mounts a fresh one for B. B's state _starts_ as "loading". There's no render where B's URL shows A's data.
+- **Abort in the cleanup:** A's request is cancelled at the network level, so its `.then` never runs. The `ignore` flag from Week 1 would also prevent the state write, but it lets the request finish in the background. Aborting frees the connection and is visible in DevTools as "(canceled)".
+- **Considered:** an `ignore` flag only (the request keeps running); a request-sequence counter (works, but more code than `AbortController`, which every `fetch` already supports through the D1-4 client).
+
+### Back to Top
+
+- **Used:** `useScrolledPast(threshold)` registers a **passive** scroll listener throttled with `requestAnimationFrame` (at most one check per frame), and only re-renders when the boolean flips. `BackToTop` renders nothing while hidden, so it's never an invisible Tab stop. Clicking scrolls up (instant if the user prefers reduced motion) and moves focus to `#main`, so keyboard users aren't left at the bottom.
+- **Considered:** `IntersectionObserver` on a sentinel element at the top. It's arguably more efficient (no scroll events at all), but the task asks for a listener to clean up, and the rAF throttle makes the scroll cost negligible. I'd switch to IO if profiling (D4-2) showed scroll work.
+- Also on the list page, where it's genuinely useful (long grid). It's the same component and the same cleanup.
+
+### Proving it
+
+- **"Never shows the wrong one":** tests give each product a different response delay (A slow, B fast) and switch before A answers. A `MutationObserver` records **every heading ever rendered**, and the assertion is that A's name never appeared, not just that the final heading is B. Each request's `AbortSignal` is captured to assert A really was cancelled. There's also a burst test (A → C → B) and a related-products abort test.
+- **"Nothing keeps running":** spies on `addEventListener` / `removeEventListener` check that every scroll handler added by the details page is removed after navigating away. `requestAnimationFrame` is stubbed so a frame is guaranteed to be pending, and the test asserts it was cancelled with that exact id. Also covered: the in-flight request aborts on leaving, and the title is restored on unmount.
+- **Mutation check:** I temporarily removed `key={id}` and the `abort()` cleanup. 3 of the 7 D2-4 tests failed (stale product shown, requests not cancelled), then passed again once restored. The tests guard the behavior; they don't pass vacuously.
+- **Real browser** (Edge, StrictMode, Service Worker):
+  - Scroll listeners counted with DevTools' `getEventListeners(window)` go 0 → 1 → 0 (404 page → details → left). StrictMode's double mount leaves no extra listener.
+  - Switching through three related products within ~240 ms, with random 0.6–1.8 s responses, only ever rendered the final product.
