@@ -22,3 +22,12 @@ Log of notable AI use during the Bug Bazaar week (required by D5-7: three AI use
 - **How it was caught:** not by tests (jsdom has no StrictMode and no Service Worker), but by driving real headless Edge and reading the screenshots. The error state never showed up. A targeted probe (abort a request, then check whether the forced failure was still armed) proved that the Service Worker doesn't forward aborts.
 - **What changed:** the speculative check was removed, and the panel switched to persistent failures with an explicit "Stop errors" step, which is deterministic everywhere.
 - **Lesson:** "the tests pass" isn't "it works". Check behavior that depends on the runtime (StrictMode, Service Workers, real browser history) in a real browser, and test assumptions with a probe instead of coding around them.
+
+---
+
+## AI mistake: a test that couldn't fail (D3-2)
+
+- **What happened:** the AI wrote a "can't be double-submitted" test: double-click Place order, then assert one request. It passed.
+- **How it was caught:** mutation testing. With both double-submit guards deliberately removed, the test **still passed**. The mock answered instantly, so the first order completed and the page navigated away before the second click landed. The test never reached the situation it claimed to check.
+- **What changed:** the test now holds the first request in flight for 200 ms (an MSW handler that delays, then falls through to the real one). It asserts the button is disabled and reads "Placing your order…" during the request, and that only one request was sent. It fails without the guards and passes with them.
+- **Lesson:** a green test isn't evidence until you've seen it go red for the right reason. For every key guarantee this week (race safety, effect cleanup, idempotency, double-submit), I break the code on purpose and confirm the test catches it.

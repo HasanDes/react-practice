@@ -544,3 +544,68 @@ Global state is only what multiple distant parts of the app must share and chang
 - **Zustand / React context + `useReducer`:** less boilerplate, but the task asks for Redux Toolkit. RTK's selectors, frozen state and DevTools time-travel also make the "defined updates" guarantee concrete and inspectable.
 - **RTK Query now:** it would replace `useRequest` with a cached data layer. That's D3-5's topic (caching), and `useRequest`'s keys were designed to map onto query keys.
 - **Persisting the cart now:** "the cart survives a reload" is a D3-2 criterion, so it lands there.
+
+---
+
+## D3-2: Cart
+
+### Quantities can't exceed stock: enforced in the reducer, helped by the UI
+
+- **Used:** the cart reducer clamps every quantity to `1…stock` (D3-1). The cart page's stepper disables + at stock, shows "Only N available", and clamps typed values on Enter or blur. The number input keeps a local draft, so typing "1" on the way to "12" doesn't get fought mid-keystroke.
+- **Why:** the store is the guarantee and the UI is the help. A bug in any component still can't put 99 ducks in a cart that only has 3 in stock.
+- **Stock goes stale**, because other shoppers buy things too. So the server has the final word at checkout (409, below), and the cart's `stockRefreshed` action corrects lines with fresh numbers.
+
+### The cart survives a reload: `localStorage` + validation
+
+- **Used:** `persistCart(store)` subscribes to the store and writes `cart` to `localStorage` **only when the cart reference changes** (immutable state, so a new reference means the cart changed and an unrelated session update writes nothing). At startup, `loadCart()` reads it back, **validates it with a Zod schema**, re-applies the cart rules (never above stock, no empty lines) and passes it to `makeStore` as preloaded state.
+- **Considered:** `redux-persist` (a dependency plus rehydration actions for one slice); `sessionStorage` (lost when the tab closes, which is not what "survives" means for a shopping cart).
+- **Why validate:** storage is untrusted. Old app versions, manual edits and other tabs can leave anything there. Corrupt or wrongly shaped data results in an empty cart, not a crash.
+- **Not done:** cross-tab sync (a `storage` event listener that replaces the cart). Two tabs can diverge until reload. A small, clear next step if needed.
+
+### A 409 names the item that ran out, and fixes the cart
+
+- **Used:** the 409 body's `details` are keyed by productId (D1-2 contract). `placeOrder()` refetches **only those products**, dispatches `stockRefreshed` (lowering quantities, removing sold-out lines), and shows each item by name: "**Decaf Pods #1** only has 1 left, so we lowered the quantity in your cart" / "… just sold out and was removed".
+- **Names come from our own cart lines**, never from the server's message text (D3-4: raw messages never reach the screen). The user then reviews and places the order again.
+
+### A retried checkout doesn't create a duplicate: idempotency keys
+
+- **Used:** each checkout attempt sends an `Idempotency-Key` header. The key is stored in `sessionStorage` under a **signature of the cart contents** (`p-0001x2,p-0042x1`, order-independent):
+  - The same cart reuses the same key across retries, double-clicks and **a reload mid-checkout**.
+  - A different cart (for example, after a 409 lowered a quantity) is a different order, so it gets a new key.
+  - The key is cleared after success.
+- **Server side** (the mock, D1-2): a repeated key for the same user returns the **original** order without taking stock again.
+- **Considered:** a key per page view in component state (lost on reload, so a reload-then-retry could double-charge); disabling the button only (it stops double-clicks, but not "the response got lost, so the user retries"); generating the order id on the client (works, but the contract has the server assign ids).
+- **The double-click guard** is two layers: the button is disabled while submitting, and the handler returns early if a submit is already in flight (covering a second click that lands before React re-renders).
+
+### Checkout flow
+
+- **State:** a discriminated union, `idle | submitting | failed(problem)`, so "submitting with an error message" can't be shown.
+- **Problems by kind:**
+
+  | Kind                              | What the user sees                                                                         |
+  | --------------------------------- | ------------------------------------------------------------------------------------------ |
+  | out-of-stock (409)                | The item names, with the cart corrected                                                    |
+  | session-expired (401)             | The session is already cleared by the D3-1 wiring; the cart is kept, with a sign-in prompt |
+  | invalid-cart (400)                | A link to review the cart                                                                  |
+  | retryable (offline, timeout, 5xx) | **Try again** with the same key, plus "you won't be charged twice"                         |
+
+- **Success:** clear the cart and key, then go to `/orders/:id` with `replace: true`, so Back doesn't return to a finished checkout.
+- **Order confirmation** polls `GET /api/orders/:id` every 3 s until "completed". Status changes are announced in a polite live region. Cleanup aborts the in-flight request and clears the timer (D2-4: a test shows no polls after unmount).
+- **Signed out:** checkout shows "Sign in to check out" linking to `/login?returnTo=/checkout`. The login page itself is D3-3.
+
+### Proving it
+
+- **Tests** (`checkout.test.tsx`, `cartStorage.test.ts`):
+  - stepper limits, typed values clamped, remove
+  - persistence round-trip, corrupt data, rules re-applied, writes only on cart changes
+  - a new app instance from saved storage
+  - success
+  - **409 naming two items**, with the cart corrected and the order succeeding afterwards
+  - **lost response**: the server commits, the browser never hears back, the user retries, and the result is the same order id, one order, stock taken once, and the same key on both requests
+  - 401 keeps the cart
+  - double-click sends one request
+  - polling advances and stops on unmount
+- **Mutation checks:**
+  - **New key per attempt** (no idempotency): the lost-response test failed. Good.
+  - **No double-submit guards:** at first, **the test still passed**. With an instant mock response, the order finished and the page navigated away _before_ the second click, so the test never exercised the in-flight window. I fixed the test by holding the first request in flight for 200 ms. With guards removed it now fails, and with guards restored it passes. A test that can't fail proves nothing.
+- **Real browser:** the stepper stopped at stock 3 with the limit message, the total was correct ($128.95), the cart survived a **real reload**, and checkout showed the sign-in prompt while signed out.
