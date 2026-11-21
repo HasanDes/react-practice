@@ -10,6 +10,7 @@ import CheckoutPage from "../features/orders/pages/CheckoutPage.tsx";
 import OrderConfirmationPage from "../features/orders/pages/OrderConfirmationPage.tsx";
 import ProductDetailRoute from "../features/products/pages/ProductDetailPage.tsx";
 import ProductsPage from "../features/products/pages/ProductsPage.tsx";
+import { DuckIcon } from "../components/icons.tsx";
 import { useFocusOnRouteChange } from "../hooks/useFocusOnRouteChange.ts";
 import NotFoundPage from "./NotFoundPage.tsx";
 
@@ -29,7 +30,8 @@ export default function App() {
       <header className="site-header">
         <p className="site-title">
           <Link to="/">
-            <span aria-hidden="true">🦆 </span>The Bug Bazaar
+            <DuckIcon className="site-title__logo" />
+            The Bug Bazaar
           </Link>
         </p>
         <nav aria-label="Main" className="site-nav">

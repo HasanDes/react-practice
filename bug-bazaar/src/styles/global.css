@@ -123,6 +123,9 @@ button[aria-disabled="true"] {
 }
 
 .site-title a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   color: inherit;
   text-decoration: none;
 }
@@ -213,12 +216,26 @@ main:focus {
   margin-top: 0.5rem;
 }
 
-/* Skeletons: same shapes as the real cards, so nothing jumps when data lands. */
+/* Skeletons: same shapes as the real cards, so nothing jumps when data lands.
+   The shimmer is a highlight that slides across with `transform`, which the
+   compositor animates off the main thread (D4-2). It used to animate
+   `background-position`, which repaints every bar on the main thread every
+   frame: ~90 paints while the list loaded, competing with rendering it. */
 .skeleton {
+  position: relative;
+  overflow: hidden;
   border-radius: 4px;
-  background: linear-gradient(90deg, #e4e7eb 0%, #f0f2f5 50%, #e4e7eb 100%);
-  background-size: 200% 100%;
+  background: #e4e7eb;
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 55%) 50%, transparent 100%);
+  transform: translateX(-100%);
   animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  will-change: transform;
 }
 
 .skeleton--image {
@@ -252,17 +269,14 @@ main:focus {
 }
 
 @keyframes skeleton-shimmer {
-  from {
-    background-position: 200% 0;
-  }
   to {
-    background-position: -200% 0;
+    transform: translateX(100%);
   }
 }
 
 /* Respect users who ask for less motion. */
 @media (prefers-reduced-motion: reduce) {
-  .skeleton {
+  .skeleton::after {
     animation: none;
   }
 }
@@ -863,6 +877,7 @@ main:focus {
 .nav-link {
   display: inline-flex;
   align-items: center;
+  gap: 0.35rem;
   padding: 0.4rem 0.6rem;
   border-radius: var(--radius);
   font-weight: 600;
@@ -938,4 +953,10 @@ main:focus {
 .auth__hint {
   color: var(--color-muted);
   font-size: 0.9rem;
+}
+
+.product-card__star {
+  margin-right: 0.25em;
+  color: #b7791f;
+  vertical-align: -0.125em;
 }

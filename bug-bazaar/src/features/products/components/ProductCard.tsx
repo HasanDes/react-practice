@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { StarIcon } from "../../../components/icons.tsx";
 import type { Product } from "../../../types/api.ts";
 import { formatPrice } from "../../../utils/formatPrice.ts";
 import type { FromListState } from "../navigation.ts";
@@ -44,7 +45,7 @@ export default function ProductCard({ product, listSearch, headingLevel = 2 }: P
         <p className="product-card__price">{formatPrice(price)}</p>
         <StockStatus stock={stock} />
         <p className="product-card__rating">
-          <span aria-hidden="true">★ </span>
+          <StarIcon className="product-card__star" />
           <span className="visually-hidden">Rated </span>
           {rating.toFixed(1)}
           <span className="visually-hidden"> out of 5</span>

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { CartIcon } from "../../../components/icons.tsx";
 import { useAppSelector } from "../../../store/store.ts";
 import { selectCartCount } from "../cartSlice.ts";
 
@@ -17,9 +18,9 @@ export default function CartLink() {
 
   return (
     <Link to="/cart" className="cart-link">
-      {/* What's seen: 🛒 Cart 3. What's read: "Cart, 3 items" (one text node, so
+      {/* What's seen: [cart icon] Cart 3. What's read: "Cart, 3 items" (one text node, so
           every browser and test library computes the same name). */}
-      <span aria-hidden="true">🛒</span>
+      <CartIcon />
       <span className="cart-link__text" aria-hidden="true">
         Cart
       </span>

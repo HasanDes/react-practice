@@ -11,7 +11,7 @@ import jsxA11y from "eslint-plugin-jsx-a11y";
 import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
-  { ignores: ["dist", "coverage", "node_modules", "public/mockServiceWorker.js"] },
+  { ignores: ["dist", "dist-*", "coverage", "node_modules", "public/mockServiceWorker.js"] },
 
   js.configs.recommended,
 
