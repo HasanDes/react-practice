@@ -6,6 +6,7 @@ import { createOrder, getProduct } from "../../api/index.ts";
 import { classifyError } from "../../errors/appError.ts";
 import type { CreateOrderResponse } from "../../types/api.ts";
 import type { CartItem } from "../cart/cartSlice.ts";
+import { forgetProducts } from "../products/catalogCache.ts";
 
 export type OutOfStockItem = { productId: string; name: string; available: number };
 
@@ -35,6 +36,9 @@ export async function placeOrder(
       { items: items.map(({ productId, quantity }) => ({ productId, quantity })) },
       { idempotencyKey },
     );
+    // Stock for what was just bought has changed: drop cached pages showing
+    // it, so "Continue shopping" shows real numbers, not pre-order ones (D3-5).
+    forgetProducts(items.map((item) => item.productId));
     return { ok: true, order };
   } catch (thrown) {
     // Same AppError kinds as every page (D3-4); checkout adds what each means here.
@@ -84,6 +88,7 @@ async function outOfStock(
       }
     }),
   );
+  forgetProducts(productIds); // their stock was lower than our cache said
   return {
     ok: false,
     problem: {

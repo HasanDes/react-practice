@@ -26,6 +26,7 @@ import { formatPrice } from "../../../utils/formatPrice.ts";
 import AddToCart from "../../cart/components/AddToCart.tsx";
 import ProductGrid from "../components/ProductGrid.tsx";
 import StockStatus from "../components/StockStatus.tsx";
+import { CATALOG_STALE_MS, productKey, relatedKey, RELATED_STALE_MS } from "../catalogCache.ts";
 import { CATEGORY_LABELS } from "../filters.ts";
 import { listSearchFrom, productListHref } from "../navigation.ts";
 
@@ -44,7 +45,12 @@ function ProductDetailPage({ id }: { id: string }) {
   // Aborted if the user switches product, retries or leaves before the
   // response arrives, so a slow answer for the *previous* product can never
   // be written into this page.
-  const { state: product, retry } = useRequest(id, (signal) => getProduct(id, { signal }));
+  // Cached (D3-5): a revisit, or arriving from the list, shows it instantly.
+  const { state: product, retry } = useRequest(
+    productKey(id),
+    (signal) => getProduct(id, { signal }),
+    { staleTime: CATALOG_STALE_MS },
+  );
 
   const notFound = product.status === "error" && classifyError(product.error).kind === "not-found";
   useDocumentTitle(
@@ -122,13 +128,17 @@ function ProductDetails({ product }: { product: Product }) {
 function RelatedProducts({ product }: { product: Product }) {
   const { id, category } = product;
   const listSearch = listSearchFrom(useLocation().state);
-  const { state: related, retry } = useRequest(`related:${category}:${id}`, async (signal) => {
-    const { items } = await getProducts(
-      { category, sort: "rating-desc", pageSize: RELATED_COUNT + 1 },
-      { signal },
-    );
-    return items.filter((item) => item.id !== id).slice(0, RELATED_COUNT);
-  });
+  const { state: related, retry } = useRequest(
+    relatedKey(category, id),
+    async (signal) => {
+      const { items } = await getProducts(
+        { category, sort: "rating-desc", pageSize: RELATED_COUNT + 1 },
+        { signal },
+      );
+      return items.filter((item) => item.id !== id).slice(0, RELATED_COUNT);
+    },
+    { staleTime: RELATED_STALE_MS },
+  );
 
   return (
     <section className="related" aria-labelledby="related-heading">

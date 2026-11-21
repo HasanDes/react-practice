@@ -6,6 +6,7 @@ import LoadGate from "../../../components/LoadGate.tsx";
 import { EmptyState, LoadingState } from "../../../components/states.tsx";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle.ts";
 import { useRequest } from "../../../hooks/useRequest.ts";
+import { CATALOG_STALE_MS, listKey, seedProducts } from "../catalogCache.ts";
 import Pagination from "../components/Pagination.tsx";
 import ProductFilters from "../components/ProductFilters.tsx";
 import ProductGrid from "../components/ProductGrid.tsx";
@@ -28,9 +29,17 @@ export default function ProductsPage() {
   const queryKey = toSearchParams(filters).toString();
 
   // The key changes exactly when the query does: the previous request is
-  // aborted and loading shows at once, so stale results never flash.
-  const { state: products, retry } = useRequest(queryKey, (signal) =>
-    getProducts(toProductQuery(filters, PAGE_SIZE), { signal }),
+  // aborted and loading (or this query's cached results) shows at once, so
+  // the previous query's results never flash. Cached for revisits (D3-5),
+  // and each listed product is cached for its details page too.
+  const { state: products, retry } = useRequest(
+    listKey(queryKey),
+    async (signal) => {
+      const page = await getProducts(toProductQuery(filters, PAGE_SIZE), { signal });
+      seedProducts(page.items);
+      return page;
+    },
+    { staleTime: CATALOG_STALE_MS },
   );
   const headingRef = useRef<HTMLHeadingElement>(null);
   // A typed search is waiting to apply: what's on screen is for an older query.
